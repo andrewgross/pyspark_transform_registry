@@ -1,3 +1,4 @@
+import datetime
 import importlib.util
 import inspect
 import json
@@ -5,21 +6,21 @@ import os
 import pydoc
 import tempfile
 import typing
-from datetime import datetime
 from typing import Callable, Optional
 
 import mlflow
-import pyspark
 from pyspark.sql import SparkSession
 
 spark = SparkSession.getActiveSession()
+
 
 def _resolve_fully_qualified_name(obj):
     if obj is None:
         return None
     module = obj.__module__
-    qualname = getattr(obj, '__qualname__', obj.__name__)
+    qualname = getattr(obj, "__qualname__", obj.__name__)
     return f"{module}.{qualname}"
+
 
 def _get_function_metadata(func: Callable):
     """
@@ -30,17 +31,28 @@ def _get_function_metadata(func: Callable):
     param_info = []
     for name, param in sig.parameters.items():
         annotation = hints.get(name)
-        param_info.append({
-            "name": name,
-            "annotation": _resolve_fully_qualified_name(annotation) if annotation else None,
-            "default": param.default if param.default != inspect._empty else None
-        })
+        param_info.append(
+            {
+                "name": name,
+                "annotation": _resolve_fully_qualified_name(annotation)
+                if annotation
+                else None,
+                "default": param.default if param.default != inspect._empty else None,
+            },
+        )
     return_type = hints.get("return")
     return_annot = _resolve_fully_qualified_name(return_type) if return_type else None
     doc = inspect.getdoc(func) or ""
     return param_info, return_annot, doc
 
-def _wrap_function_source(name: str, source: str, doc: str, param_info, return_type: Optional[str]):
+
+def _wrap_function_source(
+    name: str,
+    source: str,
+    doc: str,
+    param_info,
+    return_type: Optional[str],
+):
     """
     Creates a wrapped version of the function's source code with parameter and return type metadata
     and docstring embedded as a header comment.
@@ -51,13 +63,19 @@ Auto-logged transform function: {name}
 Args:
 """
     for p in param_info:
-        annotation = f" ({p['annotation']})" if p['annotation'] else ""
-        default = f", default={p['default']}" if p['default'] is not None else ""
+        annotation = f" ({p['annotation']})" if p["annotation"] else ""
+        default = f", default={p['default']}" if p["default"] is not None else ""
         header += f"  - {p['name']}{annotation}{default}\n"
     header += f"\nReturns: {return_type or 'unspecified'}\n\n{doc}\n"
     return f"{header}{source}"
 
-def log_transform_function(func: Callable, name: str, artifact_path: str = "transform_code", as_text: bool = True):
+
+def log_transform_function(
+    func: Callable,
+    name: str,
+    artifact_path: str = "transform_code",
+    as_text: bool = True,
+):
     """
     Logs a PySpark transform function's source code to MLflow, with metadata and docstring header.
     """
@@ -66,8 +84,14 @@ def log_transform_function(func: Callable, name: str, artifact_path: str = "tran
     wrapped_source = _wrap_function_source(name, source, doc, param_info, return_type)
     filename = f"{name}.py"
 
+    # Log the source code
     if as_text:
-        mlflow.log_text(wrapped_source, f"{artifact_path}/{filename}")
+        # Create a temporary file to ensure the directory exists
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, filename)
+            with open(path, "w") as f:
+                f.write(wrapped_source)
+            mlflow.log_artifact(path, artifact_path)
     else:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, filename)
@@ -75,10 +99,30 @@ def log_transform_function(func: Callable, name: str, artifact_path: str = "tran
                 f.write(wrapped_source)
             mlflow.log_artifact(path, artifact_path)
 
-    run_id = mlflow.active_run().info.run_id
-    track_transform_version(name, run_id, artifact_path, return_type, doc, param_info)
+    # Log metadata using different MLflow features
+    # Tags for categorization
+    mlflow.set_tag("transform_type", "pyspark")
 
-def load_transform_function(run_id: str, name: str, artifact_path: str = "transform_code") -> Callable:
+    # Parameters for structured data
+    mlflow.log_param("transform_name", name)
+    mlflow.log_param("return_type", return_type or "unspecified")
+    mlflow.log_param("param_info", json.dumps(param_info))
+
+    # Log docstring as a parameter (since it might be long)
+    mlflow.log_param("docstring", doc)
+
+    # Log timestamp as a metric for versioning
+    mlflow.log_metric(
+        "timestamp",
+        datetime.datetime.now(datetime.timezone.utc).timestamp(),
+    )
+
+
+def load_transform_function(
+    run_id: str,
+    name: str,
+    artifact_path: str = "transform_code",
+) -> Callable:
     """
     Loads a logged transform function from an MLflow run using importlib.
     """
@@ -93,21 +137,27 @@ def load_transform_function(run_id: str, name: str, artifact_path: str = "transf
         raise ValueError(f"No callable named '{name}' found in artifact module.")
     return func
 
-def track_transform_version(name: str, run_id: str, artifact_path: str, return_type: Optional[str], doc: str, param_info) -> pyspark.sql.DataFrame:
+
+def find_transform_versions(name: str = None, return_type: str = None):
     """
-    Tracks transform metadata in a Delta table for discoverability and version control.
+    Find transform versions using MLflow search capabilities.
+
+    Args:
+        name: Optional filter by transform name
+        return_type: Optional filter by return type
+
+    Returns:
+        List of MLflow runs containing the transforms
     """
-    timestamp = datetime.utcnow().isoformat()
-    df = spark.createDataFrame([{
-        "function_name": name,
-        "run_id": run_id,
-        "artifact_path": artifact_path,
-        "return_type": return_type,
-        "param_info_json": json.dumps(param_info),
-        "docstring": doc,
-        "timestamp": timestamp
-    }])
-    return df
+    # Use parameters for structured data search
+    filter_string = "tags.transform_type = 'pyspark'"
+    if name:
+        filter_string += f" AND params.transform_name = '{name}'"
+    if return_type:
+        filter_string += f" AND params.return_type = '{return_type}'"
+
+    return mlflow.search_runs(filter_string=filter_string)
+
 
 def validate_transform_input(func: Callable, input_obj) -> bool:
     """
@@ -121,7 +171,6 @@ def validate_transform_input(func: Callable, input_obj) -> bool:
     first_param = params[0].name
     hints = typing.get_type_hints(func)
     expected_type = hints.get(first_param)
-    actual_type = type(input_obj)
     if expected_type is None:
         return True
 

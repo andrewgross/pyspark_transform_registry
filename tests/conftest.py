@@ -1,64 +1,25 @@
 """Pytest configuration and fixtures for Spark testing."""
 
-import subprocess
+import os
 import tempfile
-import time
 
 import mlflow
 import pytest
-import requests
 from pyspark.sql import SparkSession
 
 
 @pytest.fixture(scope="session")
-def mlflow_server():
+def mlflow_tracking():
     """
-    Starts a local MLflow tracking server for testing.
-    Uses a TemporaryDirectory context manager for automatic cleanup.
+    Sets up local MLflow tracking for testing.
+    Uses a temporary directory for tracking and artifacts.
     """
-    with tempfile.TemporaryDirectory() as mlflow_dir:
-        port = 5000  # We'll try this port first
-        while True:
-            try:
-                process = subprocess.Popen(
-                    [
-                        "mlflow",
-                        "server",
-                        "--host",
-                        "127.0.0.1",
-                        "--port",
-                        str(port),
-                        "--backend-store-uri",
-                        f"sqlite:///{mlflow_dir}/mlflow.db",
-                        "--default-artifact-root",
-                        mlflow_dir,
-                    ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                # Wait for server to start
-                for _ in range(30):
-                    try:
-                        response = requests.get(f"http://127.0.0.1:{port}/health")
-                        if response.status_code == 200:
-                            break
-                    except requests.exceptions.ConnectionError:
-                        time.sleep(1)
-                else:
-                    process.terminate()
-                    raise Exception("MLflow server failed to start")
-                mlflow.set_tracking_uri(f"http://127.0.0.1:{port}")
-                yield f"http://127.0.0.1:{port}"
-                process.terminate()
-                process.wait()
-                break
-            except Exception as e:
-                if port >= 5010:
-                    raise Exception(
-                        f"Failed to start MLflow server after trying multiple ports: {e}",
-                    )
-                port += 1
-                continue
+    with tempfile.TemporaryDirectory() as tracking_dir:
+        # Set up local tracking and artifact storage
+        os.environ["MLFLOW_ARTIFACT_ROOT"] = tracking_dir
+        mlflow.set_tracking_uri(f"file://{tracking_dir}")
+        mlflow.set_experiment("pyspark-transform-registry-tests")
+        yield tracking_dir
 
 
 @pytest.fixture(scope="session")
