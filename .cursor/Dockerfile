@@ -1,6 +1,6 @@
 FROM ubuntu:22.04
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates openjdk-17-jdk && apt clean
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates openjdk-17-jdk git && apt clean
 
 # Install UV
 ADD https://astral.sh/uv/install.sh /uv-installer.sh
