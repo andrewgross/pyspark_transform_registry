@@ -8,8 +8,8 @@ USER ubuntu
 WORKDIR /home/ubuntu
 
 # Install UV
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
-RUN sh /uv-installer.sh && rm /uv-installer.sh
+ADD https://astral.sh/uv/install.sh /home/ubuntu/uv-installer.sh
+RUN sh /home/ubuntu/uv-installer.sh && rm /home/ubuntu/uv-installer.sh
 ENV PATH="/home/ubuntu/.local/bin/:$PATH"
 
 # Set JAVA_HOME environment variable
