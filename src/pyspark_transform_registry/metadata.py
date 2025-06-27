@@ -58,17 +58,30 @@ from pyspark.sql.functions import *
 
 """
     
-    header = f"""# Auto-logged transform function: {name}
-#
-# Args:"""
+    # Build parameters section
+    params_section = ""
     for p in param_info:
         annotation = f" ({p['annotation']})" if p["annotation"] else ""
         default = f", default={p['default']}" if p["default"] is not None else ""
-        header += f"\n#   - {p['name']}{annotation}{default}"
-    header += f"\n#\n# Returns: {return_type or 'unspecified'}\n#\n"
+        params_section += f"        #   - {p['name']}{annotation}{default}\n"
+    
+    # Build docstring section
+    doc_section = ""
     if doc:
-        # Add docstring as comments, line by line
         for line in doc.split('\n'):
-            header += f"# {line}\n"
-    header += "#\n\n"
+            doc_section += f"        # {line}\n"
+    
+    # Build complete header with natural indentation
+    header = f"""        # Auto-logged transform function: {name}
+        #
+        # Args:
+{params_section}        #
+        # Returns: {return_type or 'unspecified'}
+        #
+{doc_section}        #
+        
+        """
+    
+    # Apply dedent to remove common leading whitespace
+    header = textwrap.dedent(header)
     return f"{imports}{header}{dedented_source}"
