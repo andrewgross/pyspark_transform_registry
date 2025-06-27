@@ -3,7 +3,7 @@ import pydoc
 import mlflow
 from pyspark.sql import DataFrame
 
-from main import (
+from pyspark_transform_registry import (
     _resolve_fully_qualified_name,
     find_transform_versions,
     log_transform_function,
