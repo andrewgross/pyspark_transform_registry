@@ -1,4 +1,5 @@
 import inspect
+import textwrap
 import typing
 from typing import Callable, Optional
 
@@ -47,14 +48,27 @@ def _wrap_function_source(
     Creates a wrapped version of the function's source code with parameter and return type metadata
     and docstring embedded as a header comment.
     """
-    header = f"""
-Auto-logged transform function: {name}
+    # Dedent the source to remove any indentation from nested function definitions
+    dedented_source = textwrap.dedent(source)
+    
+    # Add necessary imports for PySpark functions
+    imports = """# Required imports for PySpark transforms
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import *
 
-Args:
 """
+    
+    header = f"""# Auto-logged transform function: {name}
+#
+# Args:"""
     for p in param_info:
         annotation = f" ({p['annotation']})" if p["annotation"] else ""
         default = f", default={p['default']}" if p["default"] is not None else ""
-        header += f"  - {p['name']}{annotation}{default}\n"
-    header += f"\nReturns: {return_type or 'unspecified'}\n\n{doc}\n"
-    return f"{header}{source}"
+        header += f"\n#   - {p['name']}{annotation}{default}"
+    header += f"\n#\n# Returns: {return_type or 'unspecified'}\n#\n"
+    if doc:
+        # Add docstring as comments, line by line
+        for line in doc.split('\n'):
+            header += f"# {line}\n"
+    header += "#\n\n"
+    return f"{imports}{header}{dedented_source}"
