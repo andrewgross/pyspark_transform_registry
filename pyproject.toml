@@ -5,7 +5,6 @@ description = "A PySpark transform registry with MLflow integration. Requires Ja
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "git-filter-repo>=2.47.0",
     "mlflow>=2.22.0",
     "pyspark<4.0",
 ]
@@ -16,3 +15,8 @@ dev = [
     "requests>=2.0.0",
     "pre-commit>=4.2.0",
 ]
+
+[[tool.uv.index]]
+name = "pyspark"
+url = "https://pypi.org/simple"
+default = true
