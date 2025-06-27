@@ -22,6 +22,13 @@ def log_transform_function(
 ):
     """
     Logs a PySpark transform function's source code to MLflow, with metadata and docstring header.
+    
+    Args:
+        func: The function to log
+        name: Name for the logged function
+        artifact_path: Path where to store the artifact
+        as_text: If True, logs source code directly as text using mlflow.log_text().
+                 If False, logs source code as a file artifact using mlflow.log_artifact().
     """
     source = inspect.getsource(func)
     param_info, return_type, doc = _get_function_metadata(func)
@@ -30,13 +37,10 @@ def log_transform_function(
 
     # Log the source code
     if as_text:
-        # Create a temporary file to ensure the directory exists
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, filename)
-            with open(path, "w") as f:
-                f.write(wrapped_source)
-            mlflow.log_artifact(path, artifact_path)
+        # Log source code directly as text artifact
+        mlflow.log_text(wrapped_source, f"{artifact_path}/{filename}")
     else:
+        # Log source code as file artifact
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, filename)
             with open(path, "w") as f:
