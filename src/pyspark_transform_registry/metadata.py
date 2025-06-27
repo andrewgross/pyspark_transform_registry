@@ -1,5 +1,6 @@
 import inspect
 import typing
+from textwrap import dedent
 from typing import Callable, Optional
 
 
@@ -47,14 +48,14 @@ def _wrap_function_source(
     Creates a wrapped version of the function's source code with parameter and return type metadata
     and docstring embedded as a header comment.
     """
-    header = f"""
-Auto-logged transform function: {name}
+    header = dedent(f"""
+        Auto-logged transform function: {name}
 
-Args:
-"""
+        Args:
+        """).strip()
     for p in param_info:
         annotation = f" ({p['annotation']})" if p["annotation"] else ""
         default = f", default={p['default']}" if p["default"] is not None else ""
-        header += f"  - {p['name']}{annotation}{default}\n"
-    header += f"\nReturns: {return_type or 'unspecified'}\n\n{doc}\n"
+        header += f"\n  - {p['name']}{annotation}{default}"
+    header += f"\n\nReturns: {return_type or 'unspecified'}\n\n{doc}\n"
     return f"{header}{source}"
