@@ -1,0 +1,13 @@
+{
+  "install": "uv sync --extra dev",
+  "terminals": [
+    {
+      "name": "Run PyTest",
+      "command": "uv run pytest"
+    }
+  ],
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  }
+}
