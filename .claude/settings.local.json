@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(uv run:*)",
+      "Bash(make test:*)",
+      "Bash(make:*)",
+      "Bash(uv sync:*)"
     ],
     "deny": []
   }
