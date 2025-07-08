@@ -22,7 +22,7 @@ def log_transform_function(
 ):
     """
     Logs a PySpark transform function's source code to MLflow, with metadata and docstring header.
-    
+
     Args:
         func: The function to log
         name: Name for the logged function
