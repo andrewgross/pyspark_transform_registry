@@ -176,6 +176,50 @@ git merge --squash feature/your-feature-name
 git commit -m "Add feature: description"
 ```
 
+## Language Server Integration
+
+### When to Use Language Server Tools
+
+**After writing or modifying Python code**, use language server tools to optimize code quality and catch errors:
+
+1. **Check for errors and warnings**: Use `mcp__language-server__diagnostics` to catch:
+   - Syntax errors and type mismatches
+   - Undefined variables and import issues
+   - Unused imports/variables
+   - Missing type annotations
+
+2. **Validate function signatures**: Use `mcp__language-server__hover` to verify:
+   - Correct parameter types and return annotations
+   - Function documentation and docstrings
+   - Type information at specific code positions
+
+3. **Find all usages before refactoring**: Use `mcp__language-server__references` to:
+   - Identify all places a function/class is used
+   - Ensure safe refactoring without breaking dependencies
+   - Understand code impact before changes
+
+4. **Safe symbol renaming**: Use `mcp__language-server__rename_symbol` for:
+   - Renaming functions, classes, variables across the entire codebase
+   - Maintaining consistency without manual find/replace errors
+
+### Recommended Workflow
+
+```bash
+# After writing/editing Python code:
+1. Run diagnostics on modified files to catch errors
+2. Fix any warnings or errors found
+3. Use hover info to verify type annotations
+4. Before major refactoring, check references
+5. Use rename_symbol for safe renaming operations
+```
+
+### Example Usage Patterns
+
+- **Post-implementation**: Always run diagnostics after implementing new functions
+- **Before commits**: Check diagnostics on all modified files
+- **During refactoring**: Use references to understand impact, rename_symbol for changes
+- **Type validation**: Use hover to verify complex type annotations are correct
+
 ## Test Coverage Areas
 
 - Metadata extraction and type resolution
