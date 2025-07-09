@@ -124,6 +124,33 @@ When working with Claude Code, commit frequently to preserve progress:
 - **Use descriptive commit messages** that explain the change and its purpose
 - **Include the Claude Code footer** in commit messages for tracking
 
+### Preserving Commit Messages When Fixing Linting/Formatting
+
+When pre-commit hooks or linting tools modify code during a commit:
+
+- **Always preserve the original commit message** - don't change the message to focus on linting fixes
+- **If linting changes are substantial**, mention them briefly in the commit body, not the title
+- **Example**: If implementing a new feature triggers formatting changes, keep the commit message about the feature, not the formatting
+
+**Good**:
+```
+Add automatic transform type detection and API improvements
+
+- Implement _detect_transform_type function for DataFrame/Column/Custom detection
+- Add keyword-only argument enforcement to log_transform_function
+- Auto-detect function names when not provided
+- Update tests for new API features
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+```
+
+**Bad**:
+```
+Fix linting errors and formatting issues
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+```
+
 ### Workflow Commands
 ```bash
 # One-time setup after cloning
