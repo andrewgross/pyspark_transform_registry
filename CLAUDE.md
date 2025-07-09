@@ -114,6 +114,16 @@ This repository follows a branch-based development workflow with automated code 
 
 **Note**: Pre-commit hooks automatically run linting, formatting, and other checks on every commit. If they fail, the commit is rejected until issues are fixed.
 
+### Frequent Commits for Claude Code
+
+When working with Claude Code, commit frequently to preserve progress:
+
+- **Commit after completing logical units of work** (e.g., after implementing a function, fixing tests, etc.)
+- **Commit when tests are passing** - this ensures we don't lose working code
+- **Don't ask permission to commit** - if tests pass and we're on a branch, commit automatically
+- **Use descriptive commit messages** that explain the change and its purpose
+- **Include the Claude Code footer** in commit messages for tracking
+
 ### Workflow Commands
 ```bash
 # One-time setup after cloning
