@@ -1,56 +1,136 @@
 import datetime
-import importlib.util
 import inspect
 import json
-import os
-import tempfile
+from enum import Enum
 from typing import Callable, Optional
 
 import mlflow
-from pyspark.sql import SparkSession
+import mlflow.pyfunc
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import Column
 
-from .metadata import _get_function_metadata, _wrap_function_source
+from .metadata import _get_function_metadata
+from .model_wrapper import PySparkTransformModel, create_transform_model
+from .signature_inference import infer_pyspark_signature, create_signature_from_examples
 from .versioning import generate_next_version, parse_semantic_version
+
+
+class TransformType(Enum):
+    """Types of PySpark transform functions."""
+
+    DATAFRAME_TRANSFORM = "dataframe_transform"  # df -> df
+    COLUMN_EXPRESSION = "column_expression"  # * -> col
+    CUSTOM = "custom"  # other patterns
+
+
+def _detect_transform_type(func: Callable) -> TransformType:
+    """Automatically detect the type of transform function."""
+    try:
+        sig = inspect.signature(func)
+        params = list(sig.parameters.values())
+
+        # DataFrame transform: first param is DataFrame, returns DataFrame
+        if (
+            params
+            and params[0].annotation == DataFrame
+            and sig.return_annotation == DataFrame
+        ):
+            return TransformType.DATAFRAME_TRANSFORM
+
+        # Column expression: returns Column (regardless of input types)
+        elif sig.return_annotation == Column:
+            return TransformType.COLUMN_EXPRESSION
+
+        else:
+            return TransformType.CUSTOM
+
+    except Exception:
+        return TransformType.CUSTOM
+
+
+def _suggest_calling_convention(transform_type: TransformType) -> str:
+    """Suggest calling convention based on transform type."""
+    if transform_type == TransformType.DATAFRAME_TRANSFORM:
+        return "df.transform(func, **kwargs) or func(df, **kwargs)"
+    elif transform_type == TransformType.COLUMN_EXPRESSION:
+        return "df.withColumn('col_name', func(col('input')))"
+    else:
+        return "See function documentation for usage"
+
 
 spark = SparkSession.getActiveSession()
 
 
 def log_transform_function(
     func: Callable,
-    name: str,
-    artifact_path: str = "transform_code",
-    as_text: bool = True,
+    *,
+    name: Optional[str] = None,
+    input_example: Optional[DataFrame] = None,
+    output_example: Optional[DataFrame] = None,
     version: Optional[str] = None,
     version_bump: Optional[str] = None,
-):
+    registered_model_name: Optional[str] = None,
+) -> str:
     """
-    Logs a PySpark transform function's source code to MLflow, with metadata and versioning.
+    Registers a PySpark transform function in MLflow's model registry with automatic validation.
 
     Args:
-        func: The function to log
-        name: Name for the logged function
-        artifact_path: Path where to store the artifact
-        as_text: If True, logs source code directly as text using mlflow.log_text().
-                 If False, logs source code as a file artifact using mlflow.log_artifact().
+        func: The PySpark transform function to register
+        name: Name for the transform function (defaults to func.__name__)
+        input_example: Optional example input DataFrame for schema inference
+        output_example: Optional example output DataFrame for schema inference
         version: Optional explicit semantic version (e.g., "1.2.0")
         version_bump: Optional explicit version bump type ("major", "minor", "patch")
-    """
-    source = inspect.getsource(func)
-    param_info, return_type, doc = _get_function_metadata(func)
-    wrapped_source = _wrap_function_source(name, source, doc, param_info, return_type)
-    filename = f"{name}.py"
+        registered_model_name: Optional name for the registered model (defaults to name)
 
-    # Log the source code
-    if as_text:
-        # Log source code directly as text artifact
-        mlflow.log_text(wrapped_source, f"{artifact_path}/{filename}")
+    Returns:
+        Model URI of the registered model
+    """
+    # Use function name if no name provided
+    if name is None:
+        name = func.__name__
+
+    # Extract function metadata
+    param_info, return_type, doc = _get_function_metadata(func)
+
+    # Detect transform type for metadata
+    transform_type = _detect_transform_type(func)
+    calling_convention = _suggest_calling_convention(transform_type)
+
+    # Create model wrapper
+    metadata = {
+        "param_info": param_info,
+        "return_type": return_type,
+        "docstring": doc,
+        "function_source": inspect.getsource(func),
+        "transform_type": transform_type.value,
+        "calling_convention": calling_convention,
+    }
+
+    model = create_transform_model(func, name, metadata)
+
+    # Convert PySpark DataFrame to pandas for MLflow compatibility
+    pandas_input_example = None
+    if input_example is not None:
+        try:
+            pandas_input_example = input_example.toPandas()
+        except Exception as e:
+            print(f"Warning: Could not convert input example to pandas: {e}")
+
+    # Infer signature from examples or function signature
+    signature = None
+    if input_example is not None and output_example is not None:
+        signature = create_signature_from_examples(input_example, output_example)
+    elif input_example is not None:
+        # Try to run the function to get output example
+        try:
+            output_example = func(input_example)
+            signature = create_signature_from_examples(input_example, output_example)
+        except Exception as e:
+            print(f"Warning: Could not run function to infer output schema: {e}")
+            signature = infer_pyspark_signature(func, input_example)
     else:
-        # Log source code as file artifact
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, filename)
-            with open(path, "w") as f:
-                f.write(wrapped_source)
-            mlflow.log_artifact(path, artifact_path)
+        signature = infer_pyspark_signature(func)
 
     # Handle versioning
     if version is not None:
@@ -60,60 +140,104 @@ def log_transform_function(
         # Auto-generate version based on interface changes
         semantic_version = generate_next_version(name, func, version_bump)
 
-    # Log metadata using different MLflow features
-    # Tags for categorization and versioning
+    # Create model info with tags for semantic versioning
+    model_info = mlflow.pyfunc.log_model(
+        artifact_path="model",
+        python_model=model,
+        signature=signature,
+        input_example=pandas_input_example,
+        registered_model_name=registered_model_name or name,
+        metadata={
+            "transform_type": "pyspark",
+            "transform_name": name,
+            "semantic_version": str(semantic_version),
+            "major_version": str(semantic_version.major),
+            "minor_version": str(semantic_version.minor),
+            "patch_version": str(semantic_version.patch),
+            "param_info": json.dumps(param_info),
+            "return_type": return_type or "unspecified",
+            "docstring": doc,
+            "pyspark_transform_type": transform_type.value,
+            "calling_convention": calling_convention,
+            "timestamp": str(datetime.datetime.now(datetime.timezone.utc).timestamp()),
+        },
+    )
+
+    # Set tags on the run for backwards compatibility
     mlflow.set_tag("transform_type", "pyspark")
     mlflow.set_tag("transform_name", name)
     mlflow.set_tag("semantic_version", str(semantic_version))
 
-    # Parameters for structured data
-    mlflow.log_param("transform_name", name)
-    mlflow.log_param("return_type", return_type or "unspecified")
-    mlflow.log_param("param_info", json.dumps(param_info))
-    mlflow.log_param("major_version", semantic_version.major)
-    mlflow.log_param("minor_version", semantic_version.minor)
-    mlflow.log_param("patch_version", semantic_version.patch)
-
-    # Log docstring as a parameter (since it might be long)
-    mlflow.log_param("docstring", doc)
-
-    # Log timestamp as a metric for versioning
-    mlflow.log_metric(
-        "timestamp",
-        datetime.datetime.now(datetime.timezone.utc).timestamp(),
-    )
+    return model_info.model_uri
 
 
 def load_transform_function(
-    run_id: str,
-    name: str,
-    artifact_path: str = "transform_code",
+    model_name: str,
+    version: Optional[str] = None,
+    stage: Optional[str] = None,
+    alias: Optional[str] = None,
+    run_id: Optional[str] = None,
 ) -> Callable:
     """
-    Loads a logged transform function from an MLflow run using importlib.
-    """
-    filename = f"{artifact_path}/{name}.py"
-    path = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=filename)
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ValueError(f"Could not create module spec for {name}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    Loads a transform function from MLflow's model registry.
 
-    func = getattr(mod, name, None)
-    if not callable(func):
-        raise ValueError(f"No callable named '{name}' found in artifact module.")
-    return func
+    Args:
+        model_name: Name of the registered model
+        version: Optional model version (e.g., "1", "2")
+        stage: Optional model stage ("Staging", "Production", "Archived")
+        alias: Optional model alias ("champion", "challenger", etc.)
+        run_id: Optional run ID for backwards compatibility
+
+    Returns:
+        The original PySpark transform function
+    """
+    # Build model URI based on provided parameters
+    if run_id is not None:
+        # Backwards compatibility: load from run ID
+        model_uri = f"runs:/{run_id}/model"
+    elif version is not None:
+        model_uri = f"models:/{model_name}/{version}"
+    elif stage is not None:
+        model_uri = f"models:/{model_name}/{stage}"
+    elif alias is not None:
+        model_uri = f"models:/{model_name}@{alias}"
+    else:
+        # Default to latest version
+        model_uri = f"models:/{model_name}/latest"
+
+    # Load the model
+    loaded_model = mlflow.pyfunc.load_model(model_uri)
+
+    # Extract the transform function from the wrapper
+    # MLflow wraps our PySparkTransformModel in a _PythonModelPyfuncWrapper
+    if hasattr(loaded_model, "_model_impl") and hasattr(
+        loaded_model._model_impl,
+        "python_model",
+    ):
+        python_model = loaded_model._model_impl.python_model
+        if isinstance(python_model, PySparkTransformModel):
+            return python_model.get_transform_function()
+
+    # Fallback: try direct access
+    if hasattr(loaded_model, "_model_impl") and isinstance(
+        loaded_model._model_impl,
+        PySparkTransformModel,
+    ):
+        return loaded_model._model_impl.get_transform_function()
+
+    raise ValueError(
+        f"Loaded model is not a PySparkTransformModel: {type(loaded_model)}, impl: {type(getattr(loaded_model, '_model_impl', None))}",
+    )
 
 
 def find_transform_versions(
-    name: str = None,
-    return_type: str = None,
-    version_constraint: str = None,
+    name: Optional[str] = None,
+    return_type: Optional[str] = None,
+    version_constraint: Optional[str] = None,
     latest_only: bool = False,
-):
+) -> list[dict]:
     """
-    Find transform versions using MLflow search capabilities.
+    Find transform versions using MLflow's model registry.
 
     Args:
         name: Optional filter by transform name
@@ -122,52 +246,162 @@ def find_transform_versions(
         latest_only: If True, return only the latest version
 
     Returns:
-        List of MLflow runs containing the transforms
+        List of model version dictionaries with metadata
     """
-    # Use parameters for structured data search
-    filter_string = "tags.transform_type = 'pyspark'"
-    if name is not None:
-        filter_string += f" AND params.transform_name = '{name}'"
-    if return_type is not None:
-        filter_string += f" AND params.return_type = '{return_type}'"
+    from mlflow.tracking import MlflowClient
 
-    # Get all matching runs
-    runs = mlflow.search_runs(filter_string=filter_string, order_by=["start_time DESC"])
+    client = MlflowClient()
+    results = []
 
-    # Apply version constraint filtering if specified
-    if version_constraint is not None:
-        from .versioning import satisfies_version_constraint
+    # Get all registered models
+    registered_models = client.search_registered_models()
 
-        filtered_indices = []
-        for idx, run in runs.iterrows():
-            semantic_version_col = "tags.semantic_version"
-            if semantic_version_col in run and run[semantic_version_col] is not None:
-                try:
-                    version = parse_semantic_version(run[semantic_version_col])
-                    if satisfies_version_constraint(version, version_constraint):
-                        filtered_indices.append(idx)
-                except ValueError:
-                    # Skip invalid version formats
-                    continue
-        runs = runs.loc[filtered_indices] if filtered_indices else runs.iloc[0:0]
+    for model in registered_models:
+        # Filter by name if specified
+        if name is not None and model.name != name:
+            continue
 
-    # Return only latest version if requested
-    if latest_only and len(runs) > 0:
-        # Find the run with the highest semantic version
-        latest_idx = None
-        latest_version = None
+        # Get all versions of this model
+        model_versions = client.search_model_versions(f"name='{model.name}'")
 
-        for idx, run in runs.iterrows():
-            semantic_version_col = "tags.semantic_version"
-            if semantic_version_col in run and run[semantic_version_col] is not None:
-                try:
-                    version = parse_semantic_version(run[semantic_version_col])
-                    if latest_version is None or version > latest_version:
-                        latest_version = version
-                        latest_idx = idx
-                except ValueError:
-                    continue
+        for version in model_versions:
+            # Check if this is a transform model
+            run = client.get_run(version.run_id)
+            if run.data.tags.get("transform_type") != "pyspark":
+                continue
 
-        return runs.loc[[latest_idx]] if latest_idx is not None else runs.iloc[0:0]
+            # Get model metadata
+            try:
+                # Access model artifact metadata
+                model_uri = f"models:/{model.name}/{version.version}"
+                loaded_model = mlflow.pyfunc.load_model(model_uri)
+                artifact_metadata = loaded_model.metadata.metadata or {}
 
-    return runs
+                # Filter by return type if specified
+                if return_type is not None:
+                    model_return_type = artifact_metadata.get(
+                        "return_type",
+                        run.data.tags.get("return_type"),
+                    )
+                    if model_return_type != return_type:
+                        continue
+
+                # Parse semantic version for constraint checking
+                semantic_version_str = artifact_metadata.get(
+                    "semantic_version",
+                    run.data.tags.get("semantic_version"),
+                )
+                if semantic_version_str:
+                    try:
+                        semantic_version = parse_semantic_version(semantic_version_str)
+
+                        # Apply version constraint if specified
+                        if version_constraint is not None:
+                            from .versioning import satisfies_version_constraint
+
+                            if not satisfies_version_constraint(
+                                semantic_version,
+                                version_constraint,
+                            ):
+                                continue
+
+                        # Add to results
+                        results.append(
+                            {
+                                "model_name": model.name,
+                                "model_version": version.version,
+                                "semantic_version": semantic_version,
+                                "stage": version.current_stage,
+                                "run_id": version.run_id,
+                                "creation_timestamp": version.creation_timestamp,
+                                "metadata": {
+                                    "transform_name": artifact_metadata.get(
+                                        "transform_name",
+                                        run.data.tags.get("transform_name"),
+                                    ),
+                                    "return_type": artifact_metadata.get(
+                                        "return_type",
+                                        run.data.tags.get("return_type"),
+                                    ),
+                                    "docstring": artifact_metadata.get(
+                                        "docstring",
+                                        run.data.tags.get("docstring", ""),
+                                    ),
+                                    "param_info": artifact_metadata.get(
+                                        "param_info",
+                                        run.data.tags.get("param_info", "[]"),
+                                    ),
+                                },
+                            },
+                        )
+                    except ValueError:
+                        # Skip invalid version formats
+                        continue
+            except Exception as e:
+                # Skip models that can't be loaded
+                print(
+                    f"Warning: Could not load model {model.name} version {version.version}: {e}",
+                )
+                continue
+
+    # Sort by semantic version (descending)
+    results.sort(key=lambda x: x["semantic_version"], reverse=True)
+
+    # Return only latest if requested
+    if latest_only and results:
+        return [results[0]]
+
+    return results
+
+
+def load_transform_function_by_name(
+    name: str,
+    version_constraint: Optional[str] = None,
+    latest_only: bool = True,
+) -> Callable:
+    """
+    Convenience function to load a transform function by name.
+
+    Args:
+        name: Name of the transform function
+        version_constraint: Optional version constraint
+        latest_only: If True, load only the latest matching version
+
+    Returns:
+        The loaded transform function
+    """
+    versions = find_transform_versions(
+        name=name,
+        version_constraint=version_constraint,
+        latest_only=latest_only,
+    )
+
+    if not versions:
+        raise ValueError(f"No transform versions found for name '{name}'")
+
+    # Get the first (latest) version
+    latest_version = versions[0]
+    model_name = latest_version["model_name"]
+    model_version = latest_version["model_version"]
+
+    return load_transform_function(model_name, version=model_version)
+
+
+# Backwards compatibility function for existing API
+def load_transform_function_from_run(
+    run_id: str,
+    name: str,
+    artifact_path: str = "transform_code",
+) -> Callable:
+    """
+    Backwards compatibility function for loading from run ID.
+
+    Args:
+        run_id: MLflow run ID
+        name: Transform function name
+        artifact_path: Legacy parameter (ignored)
+
+    Returns:
+        The loaded transform function
+    """
+    return load_transform_function(model_name=name, run_id=run_id)

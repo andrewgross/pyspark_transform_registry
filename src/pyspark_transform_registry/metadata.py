@@ -47,6 +47,9 @@ def _wrap_function_source(
     """
     Creates a wrapped version of the function's source code with parameter and return type metadata
     and docstring embedded as a header comment.
+
+    Note: This function is now primarily used for backwards compatibility.
+    MLflow model signatures provide better metadata handling for the model registry.
     """
     # Dedent the source to remove any indentation from nested function definitions
     dedented_source = textwrap.dedent(source)
@@ -85,3 +88,38 @@ from pyspark.sql.functions import *
     # Apply dedent to remove common leading whitespace
     header = textwrap.dedent(header)
     return f"{imports}{header}{dedented_source}"
+
+
+def extract_metadata_from_signature(signature) -> dict:
+    """
+    Extract metadata from an MLflow model signature.
+
+    Args:
+        signature: MLflow ModelSignature object
+
+    Returns:
+        Dictionary containing extracted metadata
+    """
+    metadata = {}
+
+    if signature and signature.inputs:
+        metadata["input_schema"] = [
+            {
+                "name": col.name,
+                "type": str(col.type),
+                "optional": getattr(col, "optional", False),
+            }
+            for col in signature.inputs.inputs
+        ]
+
+    if signature and signature.outputs:
+        metadata["output_schema"] = [
+            {
+                "name": col.name,
+                "type": str(col.type),
+                "optional": getattr(col, "optional", False),
+            }
+            for col in signature.outputs.inputs
+        ]
+
+    return metadata

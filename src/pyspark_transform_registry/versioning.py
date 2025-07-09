@@ -4,8 +4,6 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-import mlflow
-
 
 @dataclass
 class SemanticVersion:
@@ -93,28 +91,16 @@ def get_latest_version(transform_name: str) -> Optional[SemanticVersion]:
     Returns:
         Latest semantic version or None if no versions exist
     """
-    # Search for existing versions of this transform
-    filter_string = f"params.transform_name = '{transform_name}'"
-    runs = mlflow.search_runs(filter_string=filter_string, order_by=["start_time DESC"])
+    from .core import find_transform_versions
 
-    if runs.empty:
+    # Use the model registry to find versions
+    versions = find_transform_versions(name=transform_name, latest_only=True)
+
+    if not versions:
         return None
 
-    # Find the latest semantic version
-    latest_version = None
-    for _, run in runs.iterrows():
-        # MLflow flattens tags/params into columns like 'tags.semantic_version'
-        semantic_version_col = "tags.semantic_version"
-        if semantic_version_col in run and run[semantic_version_col] is not None:
-            try:
-                version = parse_semantic_version(run[semantic_version_col])
-                if latest_version is None or version > latest_version:
-                    latest_version = version
-            except ValueError:
-                # Skip invalid version formats
-                continue
-
-    return latest_version
+    # Return the latest semantic version
+    return versions[0]["semantic_version"]
 
 
 def generate_next_version(
@@ -213,32 +199,31 @@ def _get_latest_function_metadata(transform_name: str) -> Optional[dict]:
     Returns:
         Function metadata dictionary or None if not found
     """
-    filter_string = f"params.transform_name = '{transform_name}'"
-    runs = mlflow.search_runs(filter_string=filter_string, order_by=["start_time DESC"])
+    from .core import find_transform_versions
 
-    if runs.empty:
+    # Use the model registry to find the latest version
+    versions = find_transform_versions(name=transform_name, latest_only=True)
+
+    if not versions:
         return None
 
-    # Get the most recent run
-    latest_run = runs.iloc[0]
-    run_id = latest_run["run_id"]
+    latest_version = versions[0]
 
     # Parse param_info from JSON if it exists
     param_info = []
-    param_info_col = "params.param_info"
-    if param_info_col in latest_run and latest_run[param_info_col] is not None:
+    if "param_info" in latest_version["metadata"]:
         import json
 
         try:
-            param_info = json.loads(latest_run[param_info_col])
+            param_info = json.loads(latest_version["metadata"]["param_info"])
         except (json.JSONDecodeError, TypeError):
             param_info = []
 
     return {
-        "run_id": run_id,
+        "run_id": latest_version["run_id"],
         "param_info": param_info,
-        "return_type": latest_run.get("params.return_type"),
-        "semantic_version": latest_run.get("tags.semantic_version"),
+        "return_type": latest_version["metadata"].get("return_type"),
+        "semantic_version": str(latest_version["semantic_version"]),
     }
 
 
