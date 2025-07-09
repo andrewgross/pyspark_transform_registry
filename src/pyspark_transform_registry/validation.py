@@ -20,4 +20,8 @@ def validate_transform_input(func: Callable, input_obj) -> bool:
         return True
 
     resolved = pydoc.locate(f"{expected_type.__module__}.{expected_type.__qualname__}")
-    return isinstance(input_obj, resolved) if resolved and inspect.isclass(resolved) else False
+    return (
+        isinstance(input_obj, resolved)
+        if resolved and inspect.isclass(resolved)
+        else False
+    )

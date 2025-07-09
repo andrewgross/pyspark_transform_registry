@@ -50,38 +50,38 @@ def _wrap_function_source(
     """
     # Dedent the source to remove any indentation from nested function definitions
     dedented_source = textwrap.dedent(source)
-    
+
     # Add necessary imports for PySpark functions
     imports = """# Required imports for PySpark transforms
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import *
 
 """
-    
+
     # Build parameters section
     params_section = ""
     for p in param_info:
         annotation = f" ({p['annotation']})" if p["annotation"] else ""
         default = f", default={p['default']}" if p["default"] is not None else ""
         params_section += f"        #   - {p['name']}{annotation}{default}\n"
-    
+
     # Build docstring section
     doc_section = ""
     if doc:
-        for line in doc.split('\n'):
+        for line in doc.split("\n"):
             doc_section += f"        # {line}\n"
-    
+
     # Build complete header with natural indentation
     header = f"""        # Auto-logged transform function: {name}
         #
         # Args:
 {params_section}        #
-        # Returns: {return_type or 'unspecified'}
+        # Returns: {return_type or "unspecified"}
         #
 {doc_section}        #
-        
+
         """
-    
+
     # Apply dedent to remove common leading whitespace
     header = textwrap.dedent(header)
     return f"{imports}{header}{dedented_source}"

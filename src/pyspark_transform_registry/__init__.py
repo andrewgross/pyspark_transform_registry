@@ -9,11 +9,23 @@ from .core import (
 )
 from .metadata import _resolve_fully_qualified_name
 from .validation import validate_transform_input
+from .versioning import (
+    SemanticVersion,
+    parse_semantic_version,
+    validate_semantic_version,
+    get_latest_version,
+    satisfies_version_constraint,
+)
 
 __all__ = [
     "log_transform_function",
-    "load_transform_function", 
+    "load_transform_function",
     "find_transform_versions",
     "validate_transform_input",
     "_resolve_fully_qualified_name",
+    "SemanticVersion",
+    "parse_semantic_version",
+    "validate_semantic_version",
+    "get_latest_version",
+    "satisfies_version_constraint",
 ]

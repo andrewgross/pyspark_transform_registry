@@ -2,7 +2,7 @@ import pydoc
 
 import mlflow
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, lit
+from pyspark.sql.functions import col
 
 from pyspark_transform_registry import (
     _resolve_fully_qualified_name,
@@ -76,67 +76,68 @@ def test_mlflow_integration(spark, mlflow_tracking):
 
 def test_mlflow_round_trip_execution(spark, mlflow_tracking):
     """Test the complete round-trip: save transform to MLflow, download it, and execute it."""
-    
+
     def add_doubled_column(df: DataFrame) -> DataFrame:
         """A simple transform that adds a column with doubled values."""
         return df.withColumn("doubled_value", col("value") * 2)
 
     # Create test data
     test_data = spark.createDataFrame([(1, "a"), (2, "b"), (3, "c")], ["value", "name"])
-    
+
     # Start an MLflow run
     with mlflow.start_run() as run:
         run_id = run.info.run_id
         transform_name = "add_doubled_column"
-        
+
         print(f"\nTesting round-trip execution with run ID: {run_id}")
-        
+
         # Step 1: Log the transform function to MLflow
         log_transform_function(add_doubled_column, transform_name)
         print(f"✓ Logged transform '{transform_name}' to MLflow")
-        
+
         # Step 2: Load the transform function back from MLflow
         loaded_transform = load_transform_function(run_id, transform_name)
         print(f"✓ Loaded transform '{transform_name}' from MLflow")
-        
+
         # Step 3: Execute both the original and loaded functions
         original_result = add_doubled_column(test_data)
         loaded_result = loaded_transform(test_data)
-        
+
         # Step 4: Convert to pandas for easy comparison (collect small datasets)
         original_rows = original_result.collect()
         loaded_rows = loaded_result.collect()
-        
+
         print(f"Original result: {original_rows}")
         print(f"Loaded result: {loaded_rows}")
-        
+
         # Step 5: Verify the results are identical
         assert len(original_rows) == len(loaded_rows)
-        
+
         # Sort both results to ensure consistent comparison
         original_sorted = sorted(original_rows, key=lambda x: x.value)
         loaded_sorted = sorted(loaded_rows, key=lambda x: x.value)
-        
+
         for orig_row, loaded_row in zip(original_sorted, loaded_sorted):
             assert orig_row.value == loaded_row.value
             assert orig_row.name == loaded_row.name
             assert orig_row.doubled_value == loaded_row.doubled_value
             # Verify the transformation logic worked correctly
             assert orig_row.doubled_value == orig_row.value * 2
-        
-        print(f"✓ Both original and loaded transforms produced identical results")
-        
+
+        print("✓ Both original and loaded transforms produced identical results")
+
         # Step 6: Test that the loaded function has the correct signature and metadata
         import inspect
+
         original_sig = inspect.signature(add_doubled_column)
         loaded_sig = inspect.signature(loaded_transform)
-        
+
         assert str(original_sig) == str(loaded_sig)
         print(f"✓ Function signatures match: {original_sig}")
-        
+
         # Step 7: Verify the function can be found using search
         found_transforms = find_transform_versions(name=transform_name)
         assert len(found_transforms) > 0
-        print(f"✓ Transform can be found via search functionality")
-        
-        print(f"\n🎉 Complete round-trip test successful!")
+        print("✓ Transform can be found via search functionality")
+
+        print("\n🎉 Complete round-trip test successful!")
