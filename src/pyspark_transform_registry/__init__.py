@@ -8,6 +8,7 @@ from .core import (
     load_transform_function_by_name,
     load_transform_function_from_run,
     log_transform_function,
+    log_transform_cluster,
     TransformType,
 )
 from .metadata import _resolve_fully_qualified_name
@@ -24,6 +25,7 @@ from .versioning import (
 
 __all__ = [
     "log_transform_function",
+    "log_transform_cluster",
     "load_transform_function",
     "load_transform_function_by_name",
     "load_transform_function_from_run",

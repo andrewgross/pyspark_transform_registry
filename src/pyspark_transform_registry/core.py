@@ -70,6 +70,10 @@ def log_transform_function(
     version: Optional[str] = None,
     version_bump: Optional[str] = None,
     registered_model_name: Optional[str] = None,
+    extra_pip_requirements: Optional[list[str]] = None,
+    code_paths: Optional[list[str]] = None,
+    validate_dependencies: bool = True,
+    auto_detect_requirements: bool = True,
 ) -> str:
     """
     Registers a PySpark transform function in MLflow's model registry with automatic validation.
@@ -82,6 +86,10 @@ def log_transform_function(
         version: Optional explicit semantic version (e.g., "1.2.0")
         version_bump: Optional explicit version bump type ("major", "minor", "patch")
         registered_model_name: Optional name for the registered model (defaults to name)
+        extra_pip_requirements: Additional pip requirements to include
+        code_paths: Local code paths to bundle with the transform
+        validate_dependencies: Whether to validate function dependencies and warn about issues
+        auto_detect_requirements: Whether to automatically detect minimal requirements
 
     Returns:
         Model URI of the registered model
@@ -89,6 +97,59 @@ def log_transform_function(
     # Use function name if no name provided
     if name is None:
         name = func.__name__
+
+    # Analyze dependencies if requested
+    final_pip_requirements = None
+    final_code_paths = None
+
+    if auto_detect_requirements or validate_dependencies:
+        from .requirements_analysis import (
+            create_minimal_requirements,
+            validate_function_safety,
+            DependencyAnalyzer,
+        )
+
+        if validate_dependencies:
+            # Validate function safety and warn about potential issues
+            analyzer = DependencyAnalyzer()
+            validation = validate_function_safety(func, analyzer)
+
+            if validation["warnings"]:
+                print(f"⚠️  Dependency warnings for function '{name}':")
+                for warning in validation["warnings"]:
+                    print(f"   - {warning}")
+
+            if validation["errors"]:
+                print(f"❌ Dependency errors for function '{name}':")
+                for error in validation["errors"]:
+                    print(f"   - {error}")
+                raise ValueError(
+                    f"Function '{name}' has dependency issues that prevent safe bundling",
+                )
+
+        if auto_detect_requirements:
+            # Create minimal requirements
+            requirements_spec = create_minimal_requirements(
+                func,
+                extra_requirements=extra_pip_requirements,
+                code_paths=code_paths,
+            )
+
+            final_pip_requirements = requirements_spec["pip_requirements"]
+            final_code_paths = requirements_spec["code_paths"]
+
+            if requirements_spec["warnings"]:
+                print(f"ℹ️  Detected dependencies for function '{name}':")
+                for warning in requirements_spec["warnings"]:
+                    print(f"   - {warning}")
+
+            print(f"📦 Minimal requirements detected: {final_pip_requirements}")
+            if final_code_paths:
+                print(f"📁 Code paths to bundle: {final_code_paths}")
+    else:
+        # Use manual requirements if provided
+        final_pip_requirements = extra_pip_requirements
+        final_code_paths = code_paths
 
     # Extract function metadata
     param_info, return_type, doc = _get_function_metadata(func)
@@ -147,6 +208,8 @@ def log_transform_function(
         signature=signature,
         input_example=pandas_input_example,
         registered_model_name=registered_model_name or name,
+        extra_pip_requirements=final_pip_requirements,
+        code_paths=final_code_paths,
         metadata={
             "transform_type": "pyspark",
             "transform_name": name,
@@ -169,6 +232,147 @@ def log_transform_function(
     mlflow.set_tag("semantic_version", str(semantic_version))
 
     return model_info.model_uri
+
+
+def log_transform_cluster(
+    functions: list[Callable],
+    cluster_name: str,
+    *,
+    input_example: Optional[DataFrame] = None,
+    output_example: Optional[DataFrame] = None,
+    version: Optional[str] = None,
+    version_bump: Optional[str] = None,
+    registered_model_name: Optional[str] = None,
+    extra_pip_requirements: Optional[list[str]] = None,
+    code_paths: Optional[list[str]] = None,
+    validate_dependencies: bool = True,
+) -> str:
+    """
+    Log a cluster of related functions that should be bundled together.
+
+    This is useful when you have multiple functions that call each other
+    or share common dependencies, ensuring they're all available when
+    any transform from the cluster is loaded.
+
+    Args:
+        functions: List of functions to bundle together
+        cluster_name: Name for the function cluster
+        input_example: Optional example input DataFrame for schema inference
+        output_example: Optional example output DataFrame for schema inference
+        version: Optional explicit semantic version
+        version_bump: Optional explicit version bump type
+        registered_model_name: Optional name for the registered model
+        extra_pip_requirements: Additional pip requirements to include
+        code_paths: Local code paths to bundle with the cluster
+        validate_dependencies: Whether to validate function dependencies
+
+    Returns:
+        Model URI of the registered cluster
+    """
+    if not functions:
+        raise ValueError("At least one function must be provided")
+
+    # Create a function cluster and analyze dependencies
+    from .requirements_analysis import FunctionCluster, DependencyAnalyzer
+
+    cluster = FunctionCluster(cluster_name)
+    for func in functions:
+        cluster.add_function(func)
+
+    if code_paths:
+        for path in code_paths:
+            cluster.add_local_code_path(path)
+
+    # Analyze cluster dependencies
+    analyzer = DependencyAnalyzer()
+    cluster_deps = cluster.analyze_cluster_dependencies(analyzer)
+
+    if validate_dependencies:
+        # Validate each function in the cluster
+        all_warnings = []
+        for func in functions:
+            from .requirements_analysis import validate_function_safety
+
+            validation = validate_function_safety(func, analyzer)
+
+            if validation["warnings"]:
+                all_warnings.extend(validation["warnings"])
+
+            if validation["errors"]:
+                print(f"❌ Dependency errors for function '{func.__name__}':")
+                for error in validation["errors"]:
+                    print(f"   - {error}")
+                raise ValueError(
+                    f"Function cluster '{cluster_name}' has dependency issues",
+                )
+
+        if all_warnings:
+            print(f"⚠️  Dependency warnings for cluster '{cluster_name}':")
+            for warning in set(all_warnings):  # Remove duplicates
+                print(f"   - {warning}")
+
+    # Combine requirements
+    final_pip_requirements = cluster_deps["pip_requirements"]
+    if extra_pip_requirements:
+        final_pip_requirements.extend(extra_pip_requirements)
+
+    final_code_paths = cluster_deps["code_paths"]
+
+    print(f"📦 Cluster '{cluster_name}' requirements: {final_pip_requirements}")
+    if final_code_paths:
+        print(f"📁 Cluster code paths: {final_code_paths}")
+
+    # Create a wrapper function that contains all functions
+    def cluster_wrapper_factory():
+        # Create a namespace with all functions
+        namespace = {}
+        for func in functions:
+            namespace[func.__name__] = func
+
+        # Create the main cluster function
+        def cluster_transform(df: DataFrame, function_name: str, **kwargs) -> DataFrame:
+            """
+            Execute a function from the cluster by name.
+
+            Args:
+                df: Input DataFrame
+                function_name: Name of function to execute
+                **kwargs: Arguments to pass to the function
+
+            Returns:
+                Transformed DataFrame
+            """
+            if function_name not in namespace:
+                available = list(namespace.keys())
+                raise ValueError(
+                    f"Function '{function_name}' not found in cluster. Available: {available}",
+                )
+
+            func = namespace[function_name]
+            return func(df, **kwargs)
+
+        # Add namespace to the function for access
+        setattr(cluster_transform, "_cluster_functions", namespace)
+        setattr(cluster_transform, "_cluster_name", cluster_name)
+
+        return cluster_transform
+
+    cluster_function = cluster_wrapper_factory()
+
+    # Log the cluster using the regular log_transform_function
+    return log_transform_function(
+        cluster_function,
+        name=cluster_name,
+        input_example=input_example,
+        output_example=output_example,
+        version=version,
+        version_bump=version_bump,
+        registered_model_name=registered_model_name,
+        extra_pip_requirements=final_pip_requirements,
+        code_paths=final_code_paths,
+        validate_dependencies=False,  # Already validated above
+        auto_detect_requirements=False,  # Already analyzed above
+    )
 
 
 def load_transform_function(
