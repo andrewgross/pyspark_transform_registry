@@ -132,7 +132,7 @@ class TestVersioningIntegration:
         with mlflow.start_run() as run:
             log_transform_function(
                 sample_transform,
-                "sample_transform",
+                name="sample_transform",
                 version="1.2.3",
             )
 
@@ -153,13 +153,17 @@ class TestVersioningIntegration:
 
         # Log first version
         with mlflow.start_run():
-            log_transform_function(sample_transform, transform_name, version="1.0.0")
+            log_transform_function(
+                sample_transform,
+                name=transform_name,
+                version="1.0.0",
+            )
 
         # Log second version with minor bump
         with mlflow.start_run() as run:
             log_transform_function(
                 sample_transform,
-                transform_name,
+                name=transform_name,
                 version_bump="minor",
             )
 
@@ -177,14 +181,14 @@ class TestVersioningIntegration:
 
         # Log first version (should be 1.0.0)
         with mlflow.start_run() as run1:
-            log_transform_function(sample_transform, transform_name)
+            log_transform_function(sample_transform, name=transform_name)
 
             run_data = mlflow.get_run(run1.info.run_id)
             assert run_data.data.tags["semantic_version"] == "1.0.0"
 
         # Log second version (should auto-increment)
         with mlflow.start_run() as run2:
-            log_transform_function(sample_transform, transform_name)
+            log_transform_function(sample_transform, name=transform_name)
 
             run_data = mlflow.get_run(run2.info.run_id)
             # Should be 1.1.0 (minor bump as default)
@@ -204,13 +208,25 @@ class TestVersioningIntegration:
 
         # Log multiple versions
         with mlflow.start_run():
-            log_transform_function(sample_transform, transform_name, version="1.0.0")
+            log_transform_function(
+                sample_transform,
+                name=transform_name,
+                version="1.0.0",
+            )
 
         with mlflow.start_run():
-            log_transform_function(sample_transform, transform_name, version="1.2.0")
+            log_transform_function(
+                sample_transform,
+                name=transform_name,
+                version="1.2.0",
+            )
 
         with mlflow.start_run():
-            log_transform_function(sample_transform, transform_name, version="1.1.0")
+            log_transform_function(
+                sample_transform,
+                name=transform_name,
+                version="1.1.0",
+            )
 
         # Should return the highest version
         latest = get_latest_version(transform_name)
@@ -227,13 +243,25 @@ class TestVersioningIntegration:
 
         # Log multiple versions
         with mlflow.start_run():
-            log_transform_function(sample_transform, transform_name, version="1.0.0")
+            log_transform_function(
+                sample_transform,
+                name=transform_name,
+                version="1.0.0",
+            )
 
         with mlflow.start_run():
-            log_transform_function(sample_transform, transform_name, version="1.5.0")
+            log_transform_function(
+                sample_transform,
+                name=transform_name,
+                version="1.5.0",
+            )
 
         with mlflow.start_run():
-            log_transform_function(sample_transform, transform_name, version="2.0.0")
+            log_transform_function(
+                sample_transform,
+                name=transform_name,
+                version="2.0.0",
+            )
 
         # Test version constraint filtering
         versions = find_transform_versions(
@@ -273,11 +301,11 @@ class TestVersioningIntegration:
 
         # Log initial version
         with mlflow.start_run():
-            log_transform_function(transform_v1, transform_name, version="1.0.0")
+            log_transform_function(transform_v1, name=transform_name, version="1.0.0")
 
         # Log version with new optional parameter (should be minor bump)
         with mlflow.start_run() as run:
-            log_transform_function(transform_v2, transform_name)
+            log_transform_function(transform_v2, name=transform_name)
 
             run_data = mlflow.get_run(run.info.run_id)
             version = run_data.data.tags["semantic_version"]
@@ -286,7 +314,7 @@ class TestVersioningIntegration:
 
         # Log version with new required parameter (should be major bump)
         with mlflow.start_run() as run:
-            log_transform_function(transform_v3, transform_name)
+            log_transform_function(transform_v3, name=transform_name)
 
             run_data = mlflow.get_run(run.info.run_id)
             version = run_data.data.tags["semantic_version"]

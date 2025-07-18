@@ -7,7 +7,10 @@
       "Bash(uv run:*)",
       "Bash(make test:*)",
       "Bash(make:*)",
-      "Bash(uv sync:*)"
+      "Bash(uv sync:*)",
+      "mcp__language-server__diagnostics",
+      "mcp__language-server__hover",
+      "Bash(git reset:*)"
     ],
     "deny": []
   }

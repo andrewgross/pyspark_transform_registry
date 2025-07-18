@@ -443,10 +443,10 @@ class TestRequirementsRoundTrip:
             # Load and test the pipeline
             pipeline = load_transform_function_by_name("ml_pipeline_full")
 
-            # Execute each step
+            # Execute each step in sequence (functions depend on each other)
             prepped = pipeline(test_data, "data_prep")
-            featured = pipeline(test_data, "feature_extraction")
-            scored = pipeline(test_data, "model_scoring")
+            featured = pipeline(prepped, "feature_extraction")
+            scored = pipeline(featured, "model_scoring")
 
             assert prepped.count() == 3  # All rows have amount > 0
             assert "features" in featured.columns

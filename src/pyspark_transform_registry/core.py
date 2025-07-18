@@ -6,7 +6,7 @@ from typing import Callable, Optional
 
 import mlflow
 import mlflow.pyfunc
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import DataFrame
 from pyspark.sql import Column
 
 from .metadata import _get_function_metadata
@@ -58,9 +58,6 @@ def _suggest_calling_convention(transform_type: TransformType) -> str:
         return "See function documentation for usage"
 
 
-spark = SparkSession.getActiveSession()
-
-
 def log_transform_function(
     func: Callable,
     *,
@@ -78,8 +75,10 @@ def log_transform_function(
     """
     Registers a PySpark transform function in MLflow's model registry with automatic validation.
 
-    Args:
+    RequiredArgs:
         func: The PySpark transform function to register
+
+    KeywordArgs (must be provided as kwargs):
         name: Name for the transform function (defaults to func.__name__)
         input_example: Optional example input DataFrame for schema inference
         output_example: Optional example output DataFrame for schema inference

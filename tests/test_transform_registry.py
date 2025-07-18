@@ -44,7 +44,7 @@ def test_mlflow_integration(spark, mlflow_tracking):
         print(f"MLflow run ID: {run.info.run_id}")
 
         # Log the transform function
-        log_transform_function(sample_transform, "sample_transform")
+        log_transform_function(sample_transform, name="sample_transform")
 
         # Verify the function was logged
         # First, check that the 'transform_code' directory exists at the root
@@ -92,7 +92,7 @@ def test_mlflow_round_trip_execution(spark, mlflow_tracking):
         print(f"\nTesting round-trip execution with run ID: {run_id}")
 
         # Step 1: Log the transform function to MLflow
-        log_transform_function(add_doubled_column, transform_name)
+        log_transform_function(add_doubled_column, name=transform_name)
         print(f"✓ Logged transform '{transform_name}' to MLflow")
 
         # Step 2: Load the transform function back from MLflow
