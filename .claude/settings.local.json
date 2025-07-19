@@ -10,7 +10,11 @@
       "Bash(uv sync:*)",
       "mcp__language-server__diagnostics",
       "mcp__language-server__hover",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "WebFetch(domain:mlflow.org)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": []
   }

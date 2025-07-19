@@ -1,58 +1,51 @@
 import inspect
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import mlflow
 import mlflow.pyfunc
-from pyspark.sql import DataFrame
 
 
 class PySparkTransformModel(mlflow.pyfunc.PythonModel):
     """
-    MLflow model wrapper for PySpark transform functions.
+    Simplified MLflow model wrapper for PySpark transform functions.
 
     This wrapper allows PySpark transform functions to be registered in MLflow's
-    model registry while preserving the original function interface and enabling
-    automatic input/output validation through MLflow signatures.
+    model registry with automatic dependency inference and signature detection.
     """
 
-    def __init__(
-        self,
-        transform_func: Callable,
-        function_name: str,
-        metadata: dict[str, Any],
-    ):
+    def __init__(self, transform_func: Callable):
         """
         Initialize the PySpark transform model wrapper.
 
         Args:
             transform_func: The PySpark transform function to wrap
-            function_name: Name of the function for identification
-            metadata: Additional metadata about the function (params, return type, etc.)
         """
         self.transform_func = transform_func
-        self.function_name = function_name
-        self.metadata = metadata
+        self.function_name = transform_func.__name__
 
         # Store function source and signature for reconstruction
         self.function_source = inspect.getsource(transform_func)
         self.function_signature = inspect.signature(transform_func)
 
-    def predict(
-        self,
-        context: mlflow.pyfunc.PythonModelContext,
-        model_input: DataFrame,
-    ) -> DataFrame:
+    def predict(self, context, model_input=None):
         """
         MLflow-required predict method that delegates to the wrapped transform function.
 
+        This method handles both MLflow's signature inference and normal prediction.
+
         Args:
-            context: MLflow model context (unused for transforms)
-            model_input: Input DataFrame to transform
+            context: MLflow model context or input DataFrame (for signature inference)
+            model_input: Input DataFrame (when context is provided)
 
         Returns:
             Transformed DataFrame
         """
-        return self.transform_func(model_input)
+        # Handle signature inference case (single argument)
+        if model_input is None:
+            return self.transform_func(context)
+        # Handle normal prediction case (context, model_input)
+        else:
+            return self.transform_func(model_input)
 
     def get_transform_function(self) -> Callable:
         """
@@ -69,33 +62,28 @@ class PySparkTransformModel(mlflow.pyfunc.PythonModel):
 
     def get_metadata(self) -> dict[str, Any]:
         """Get metadata about the wrapped function."""
-        return self.metadata
+        return {
+            "function_name": self.function_name,
+            "signature": str(self.function_signature),
+            "docstring": self.transform_func.__doc__,
+        }
 
     def get_signature(self) -> inspect.Signature:
         """Get the signature of the wrapped function."""
         return self.function_signature
 
 
-def create_transform_model(
-    func: Callable,
-    name: str,
-    metadata: Optional[dict[str, Any]] = None,
-) -> PySparkTransformModel:
+def create_transform_model(func: Callable) -> PySparkTransformModel:
     """
     Create a PySpark transform model wrapper.
 
     Args:
         func: The PySpark transform function to wrap
-        name: Name for the transform function
-        metadata: Optional metadata about the function
 
     Returns:
         PySparkTransformModel instance ready for MLflow registration
     """
-    if metadata is None:
-        metadata = {}
-
-    return PySparkTransformModel(func, name, metadata)
+    return PySparkTransformModel(func)
 
 
 def extract_transform_function(model: PySparkTransformModel) -> Callable:
