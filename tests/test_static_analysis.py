@@ -6,20 +6,21 @@ schema constraints from PySpark transform function source code.
 """
 
 import inspect
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from pyspark_transform_registry.schema_constraints import (
-    PartialSchemaConstraint,
     ColumnRequirement,
     ColumnTransformation,
+    PartialSchemaConstraint,
 )
 
 # Import the test examples
-from tests.test_data.schema_constraint_examples import (
-    add_timestamp,
-    normalize_amounts,
+from pyspark_transform_registry.static_analysis.column_analyzer import (
+    find_column_references,
 )
+from tests.test_data.schema_constraint_examples import add_timestamp, normalize_amounts
 
 
 class TestLibCSTInfrastructure:
@@ -66,66 +67,38 @@ class TestColumnReferenceDetection:
         """Test detecting df.column_name patterns."""
         source = "df.amount * 2"
 
-        # This would be implemented by the column analyzer
-        # For now, test the expected interface
-        expected_columns = ["amount"]
-
-        # Mock the analyzer for now - will be implemented later
-        with patch(
-            "pyspark_transform_registry.static_analysis.column_analyzer.find_column_references",
-        ) as mock_find:
-            mock_find.return_value = expected_columns
-
-            # Simulate the call
-            from unittest.mock import MagicMock
-
-            analyzer = MagicMock()
-            analyzer.find_column_references.return_value = expected_columns
-
-            result = analyzer.find_column_references(source)
-            assert "amount" in result
+        result = find_column_references(source)
+        assert result["total_references"] == 1
+        assert result["unique_columns"] == 1
+        assert result["read_columns"] == ["amount"]
+        assert result["written_columns"] == []
+        assert result["conditional_columns"] == []
+        assert result["all_detected"] == ["amount"]
 
     def test_detect_bracket_notation_column_access(self):
         """Test detecting df["column_name"] patterns."""
         source = 'df["revenue"] - df["cost"]'
-        expected_columns = ["revenue", "cost"]
 
-        # Mock implementation
-        with patch(
-            "pyspark_transform_registry.static_analysis.column_analyzer.find_column_references",
-        ) as mock_find:
-            mock_find.return_value = expected_columns
-
-            from unittest.mock import MagicMock
-
-            analyzer = MagicMock()
-            analyzer.find_column_references.return_value = expected_columns
-
-            result = analyzer.find_column_references(source)
-            assert "revenue" in result
-            assert "cost" in result
+        result = find_column_references(source)
+        assert result["total_references"] == 2
+        assert result["unique_columns"] == 2
+        assert result["read_columns"] == {"revenue", "cost"}
+        assert result["written_columns"] == set()
+        assert result["conditional_columns"] == set()
+        assert result["all_detected"] == {"revenue", "cost"}
 
     def test_detect_complex_column_expressions(self):
         """Test detecting columns in complex expressions."""
         source = (
             "F.when(df.category == 'premium', df.amount * 0.9).otherwise(df.amount)"
         )
-        expected_columns = ["category", "amount"]
-
-        # This tests the analyzer's ability to find columns in nested expressions
-        with patch(
-            "pyspark_transform_registry.static_analysis.column_analyzer.find_column_references",
-        ) as mock_find:
-            mock_find.return_value = expected_columns
-
-            from unittest.mock import MagicMock
-
-            analyzer = MagicMock()
-            analyzer.find_column_references.return_value = expected_columns
-
-            result = analyzer.find_column_references(source)
-            assert "category" in result
-            assert "amount" in result
+        result = find_column_references(source)
+        assert result["total_references"] == 2
+        assert result["unique_columns"] == 2
+        assert result["written_columns"] == set()
+        assert result["conditional_columns"] == set()
+        assert result["all_detected"] == {"category", "amount"}
+        assert result["read_columns"] == {"category", "amount"}
 
 
 class TestDataFrameOperationDetection:
@@ -135,135 +108,122 @@ class TestDataFrameOperationDetection:
         """Test detecting withColumn operations."""
         source = 'df.withColumn("new_col", F.current_timestamp())'
 
-        # Expected operation detection
-        expected_operations = [
-            {
-                "type": "withColumn",
-                "column_name": "new_col",
-                "expression": "F.current_timestamp()",
-            },
-        ]
+        from pyspark_transform_registry.static_analysis.operation_analyzer import (
+            find_dataframe_operations,
+        )
 
-        with patch(
-            "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
-        ) as mock_find:
-            mock_find.return_value = expected_operations
+        result = find_dataframe_operations(source)
+        assert result == {}
+        assert len(result["operations"]) == 1
+        assert result["operations"][0]["type"] == "withColumn"
+        assert result["operations"][0]["column_name"] == "new_col"
+        assert result["operations"][0]["expression"] == "F.current_timestamp()"
 
-            from unittest.mock import MagicMock
+    # def test_detect_filter_operations(self):
+    #     """Test detecting filter operations."""
+    #     source = "df.filter(df.status == 'active')"
 
-            analyzer = MagicMock()
-            analyzer.find_operations.return_value = expected_operations
+    #     expected_operations = [
+    #         {
+    #             "type": "filter",
+    #             "condition": "df.status == 'active'",
+    #             "referenced_columns": ["status"],
+    #         },
+    #     ]
 
-            result = analyzer.find_operations(source)
-            assert len(result) == 1
-            assert result[0]["type"] == "withColumn"
-            assert result[0]["column_name"] == "new_col"
+    #     with patch(
+    #         "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
+    #     ) as mock_find:
+    #         mock_find.return_value = expected_operations
 
-    def test_detect_filter_operations(self):
-        """Test detecting filter operations."""
-        source = "df.filter(df.status == 'active')"
+    #         from unittest.mock import MagicMock
 
-        expected_operations = [
-            {
-                "type": "filter",
-                "condition": "df.status == 'active'",
-                "referenced_columns": ["status"],
-            },
-        ]
+    #         analyzer = MagicMock()
+    #         analyzer.find_operations.return_value = expected_operations
 
-        with patch(
-            "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
-        ) as mock_find:
-            mock_find.return_value = expected_operations
+    #         result = analyzer.find_operations(source)
+    #         assert len(result) == 1
+    #         assert result[0]["type"] == "filter"
 
-            from unittest.mock import MagicMock
+    # def test_detect_select_operations(self):
+    #     """Test detecting select operations."""
+    #     source = 'df.select("col1", "col2", "col3")'
 
-            analyzer = MagicMock()
-            analyzer.find_operations.return_value = expected_operations
+    #     expected_operations = [
+    #         {
+    #             "type": "select",
+    #             "columns": ["col1", "col2", "col3"],
+    #             "preserves_other_columns": False,
+    #         },
+    #     ]
 
-            result = analyzer.find_operations(source)
-            assert len(result) == 1
-            assert result[0]["type"] == "filter"
+    #     with patch(
+    #         "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
+    #     ) as mock_find:
+    #         mock_find.return_value = expected_operations
 
-    def test_detect_select_operations(self):
-        """Test detecting select operations."""
-        source = 'df.select("col1", "col2", "col3")'
+    #         from unittest.mock import MagicMock
 
-        expected_operations = [
-            {
-                "type": "select",
-                "columns": ["col1", "col2", "col3"],
-                "preserves_other_columns": False,
-            },
-        ]
+    #         analyzer = MagicMock()
+    #         analyzer.find_operations.return_value = expected_operations
 
-        with patch(
-            "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
-        ) as mock_find:
-            mock_find.return_value = expected_operations
+    #         result = analyzer.find_operations(source)
+    #         assert len(result) == 1
+    #         assert result[0]["type"] == "select"
+    #         assert "col1" in result[0]["columns"]
 
-            from unittest.mock import MagicMock
+    # def test_detect_drop_operations(self):
+    #     """Test detecting drop operations."""
+    #     source = 'df.drop("temp_col1", "temp_col2")'
 
-            analyzer = MagicMock()
-            analyzer.find_operations.return_value = expected_operations
+    #     expected_operations = [
+    #         {
+    #             "type": "drop",
+    #             "columns": ["temp_col1", "temp_col2"],
+    #         },
+    #     ]
 
-            result = analyzer.find_operations(source)
-            assert len(result) == 1
-            assert result[0]["type"] == "select"
-            assert "col1" in result[0]["columns"]
+    #     with patch(
+    #         "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
+    #     ) as mock_find:
+    #         mock_find.return_value = expected_operations
 
-    def test_detect_drop_operations(self):
-        """Test detecting drop operations."""
-        source = 'df.drop("temp_col1", "temp_col2")'
+    #         from unittest.mock import MagicMock
 
-        expected_operations = [
-            {
-                "type": "drop",
-                "columns": ["temp_col1", "temp_col2"],
-            },
-        ]
+    #         analyzer = MagicMock()
+    #         analyzer.find_operations.return_value = expected_operations
 
-        with patch(
-            "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
-        ) as mock_find:
-            mock_find.return_value = expected_operations
+    #         result = analyzer.find_operations(source)
+    #         assert len(result) == 1
+    #         assert result[0]["type"] == "drop"
+    #         assert "temp_col1" in result[0]["columns"]
 
-            from unittest.mock import MagicMock
+    # def test_detect_chained_operations(self):
+    #     """Test detecting chained DataFrame operations."""
+    #     source = """
+    #     df.filter(df.amount > 100)
+    #       .withColumn("processed", F.current_timestamp())
+    #       .drop("temp_column")
+    #     """
 
-            analyzer = MagicMock()
-            analyzer.find_operations.return_value = expected_operations
+    #     expected_operations = [
+    #         {"type": "filter", "referenced_columns": ["amount"]},
+    #         {"type": "withColumn", "column_name": "processed"},
+    #         {"type": "drop", "columns": ["temp_column"]},
+    #     ]
 
-            result = analyzer.find_operations(source)
-            assert len(result) == 1
-            assert result[0]["type"] == "drop"
-            assert "temp_col1" in result[0]["columns"]
+    #     with patch(
+    #         "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
+    #     ) as mock_find:
+    #         mock_find.return_value = expected_operations
 
-    def test_detect_chained_operations(self):
-        """Test detecting chained DataFrame operations."""
-        source = """
-        df.filter(df.amount > 100)
-          .withColumn("processed", F.current_timestamp())
-          .drop("temp_column")
-        """
+    #         from unittest.mock import MagicMock
 
-        expected_operations = [
-            {"type": "filter", "referenced_columns": ["amount"]},
-            {"type": "withColumn", "column_name": "processed"},
-            {"type": "drop", "columns": ["temp_column"]},
-        ]
+    #         analyzer = MagicMock()
+    #         analyzer.find_operations.return_value = expected_operations
 
-        with patch(
-            "pyspark_transform_registry.static_analysis.operation_analyzer.find_operations",
-        ) as mock_find:
-            mock_find.return_value = expected_operations
-
-            from unittest.mock import MagicMock
-
-            analyzer = MagicMock()
-            analyzer.find_operations.return_value = expected_operations
-
-            result = analyzer.find_operations(source)
-            assert len(result) == 3
+    #         result = analyzer.find_operations(source)
+    #         assert len(result) == 3
 
 
 class TestSparkFunctionAnalysis:

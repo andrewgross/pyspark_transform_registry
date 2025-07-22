@@ -7,23 +7,19 @@ from PySpark transform function source code without executing the functions.
 
 from .analyzer import analyze_function
 from .column_analyzer import ColumnAnalyzer, find_column_references
-from .operation_analyzer import (
-    OperationAnalyzer,
-    find_dataframe_operations,
-    find_operations,
+from .operation_analyzer import OperationAnalyzer, find_dataframe_operations
+from .schema_inference import (
+    ConstraintGenerator,
+    generate_constraint,
+    generate_constraint_from_function,
 )
 from .type_inference import (
     TypeInferenceEngine,
-    infer_expression_type,
-    analyze_spark_function,
     analyze_complex_expression,
     analyze_expression,
+    analyze_spark_function,
+    infer_expression_type,
     infer_spark_function_type,
-)
-from .schema_inference import (
-    ConstraintGenerator,
-    generate_constraint_from_function,
-    generate_constraint,
 )
 
 __all__ = [
@@ -37,7 +33,6 @@ __all__ = [
     # Utility functions
     "find_column_references",
     "find_dataframe_operations",
-    "find_operations",
     "infer_expression_type",
     "analyze_spark_function",
     "analyze_complex_expression",

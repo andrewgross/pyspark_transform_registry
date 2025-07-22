@@ -11,10 +11,11 @@ from pyspark_transform_registry.static_analysis.column_analyzer import ColumnRef
 from pyspark_transform_registry.static_analysis.operation_analyzer import (
     DataFrameOperation,
 )
+
 from ..schema_constraints import (
-    PartialSchemaConstraint,
     ColumnRequirement,
     ColumnTransformation,
+    PartialSchemaConstraint,
 )
 
 
@@ -152,7 +153,7 @@ class ConstraintGenerator:
         read_columns: set[str],
         conditional_columns: set[str],
         type_info: dict[str, Any],
-        operation_analysis: dict[str, DataFrameOperation],
+        operation_analysis: dict[str, list[DataFrameOperation]],
     ) -> list[ColumnRequirement]:
         """Generate required column constraints."""
         required_columns = []

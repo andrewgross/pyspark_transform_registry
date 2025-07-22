@@ -5,8 +5,9 @@ This module analyzes DataFrame column references in PySpark code to identify
 which columns are being accessed, added, modified, or removed.
 """
 
-import libcst as cst
 from typing import Any
+
+import libcst as cst
 
 
 class ColumnReference:
@@ -23,6 +24,15 @@ class ColumnReference:
         self.line_number = line_number
         self.context = None  # Additional context about the reference
 
+    def __eq__(self, other):
+        return (
+            self.column_name == other.column_name
+            and self.access_type == other.access_type
+        )
+
+    def __hash__(self):
+        return hash((self.column_name, self.access_type))
+
     def __repr__(self):
         return f"ColumnReference(column_name={self.column_name}, access_type={self.access_type})"
 
@@ -38,7 +48,7 @@ class ColumnAnalyzer(cst.CSTVisitor):
     """
 
     def __init__(self):
-        self.column_references: list[ColumnReference] = []
+        self.column_references: set[ColumnReference] = set()
         self.detected_columns: set[str] = set()
         self.operation_contexts: list[str] = []
 
@@ -50,49 +60,36 @@ class ColumnAnalyzer(cst.CSTVisitor):
         self.written_columns: set[str] = set()
         self.conditional_columns: set[str] = set()
 
-    def visit_call(self, node: cst.Call) -> None:
+    def visit_Call(self, node: cst.Call) -> None:
         """Visit function calls to detect column operations."""
-        try:
-            # Analyze different types of column operations
-            self._analyze_withColumn_call(node)
-            self._analyze_select_call(node)
-            self._analyze_drop_call(node)
-            self._analyze_filter_call(node)
-            self._analyze_functions_call(node)
-            self._analyze_groupBy_call(node)
-            self._analyze_agg_call(node)
+        # Analyze different types of column operations
+        self._analyze_withColumn_call(node)
+        self._analyze_select_call(node)
+        self._analyze_drop_call(node)
+        self._analyze_filter_call(node)
+        self._analyze_functions_call(node)
+        self._analyze_groupBy_call(node)
+        self._analyze_agg_call(node)
 
-        except Exception:
-            # Ignore parsing errors for individual calls
-            pass
-
-    def visit_attribute(self, node: cst.Attribute) -> None:
+    def visit_Attribute(self, node: cst.Attribute) -> None:
         """Visit attribute access to detect df.column_name patterns."""
-        try:
-            # Check if this is a DataFrame column access like df.column_name
-            if isinstance(node.value, cst.Name):
-                var_name = node.value.value
-                if var_name in self.dataframe_vars:
-                    column_name = node.attr.value
-                    self._add_column_reference(column_name, "read")
+        # Check if this is a DataFrame column access like df.column_name
+        if isinstance(node.value, cst.Name):
+            var_name = node.value.value
+            if var_name in self.dataframe_vars:
+                column_name = node.attr.value
+                self._add_column_reference(column_name, "read")
 
-        except Exception:
-            pass
-
-    def visit_subscript(self, node: cst.Subscript) -> None:
+    def visit_Subscript(self, node: cst.Subscript) -> None:
         """Visit subscript access to detect df["column_name"] patterns."""
-        try:
-            # Check if this is DataFrame bracket notation like df["column"]
-            if isinstance(node.value, cst.Name):
-                var_name = node.value.value
-                if var_name in self.dataframe_vars:
-                    # Extract column name from subscript
-                    column_name = self._extract_string_from_subscript(node.slice)
-                    if column_name:
-                        self._add_column_reference(column_name, "read")
-
-        except Exception:
-            pass
+        # Check if this is DataFrame bracket notation like df["column"]
+        if isinstance(node.value, cst.Name):
+            var_name = node.value.value
+            if var_name in self.dataframe_vars:
+                # Extract column name from subscript
+                column_name = self._extract_string_from_subscript(node.slice[0].slice)
+                if column_name:
+                    self._add_column_reference(column_name, "read")
 
     def _analyze_withColumn_call(self, node: cst.Call) -> None:
         """Analyze df.withColumn() calls."""
@@ -266,7 +263,7 @@ class ColumnAnalyzer(cst.CSTVisitor):
         """Add a column reference to our tracking."""
         if column_name and column_name.isidentifier():  # Valid column name
             self.detected_columns.add(column_name)
-            self.column_references.append(ColumnReference(column_name, access_type))
+            self.column_references.add(ColumnReference(column_name, access_type))
 
             # Track by access type
             if access_type == "read":
@@ -281,10 +278,10 @@ class ColumnAnalyzer(cst.CSTVisitor):
         return {
             "total_references": len(self.column_references),
             "unique_columns": len(self.detected_columns),
-            "read_columns": list(self.read_columns),
-            "written_columns": list(self.written_columns),
-            "conditional_columns": list(self.conditional_columns),
-            "all_detected": list(self.detected_columns),
+            "read_columns": set(self.read_columns),
+            "written_columns": set(self.written_columns),
+            "conditional_columns": set(self.conditional_columns),
+            "all_detected": set(self.detected_columns),
         }
 
 
@@ -298,18 +295,8 @@ def find_column_references(source_code: str) -> dict[str, Any]:
     Returns:
         Dictionary with analysis results
     """
-    try:
-        tree = cst.parse_module(source_code)
-        analyzer = ColumnAnalyzer()
-        tree.visit(analyzer)
-        return analyzer.get_analysis_summary()
-    except Exception as e:
-        return {
-            "error": str(e),
-            "total_references": 0,
-            "unique_columns": 0,
-            "read_columns": [],
-            "written_columns": [],
-            "conditional_columns": [],
-            "all_detected": [],
-        }
+    tree = cst.parse_module(source_code)
+    analyzer = ColumnAnalyzer()
+    # import pdb; pdb.set_trace()
+    tree.visit(analyzer)
+    return analyzer.get_analysis_summary()

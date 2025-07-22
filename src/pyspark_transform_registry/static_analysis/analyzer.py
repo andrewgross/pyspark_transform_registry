@@ -7,13 +7,14 @@ schema constraints from PySpark transform function source code.
 
 import inspect
 from collections.abc import Callable
+
 import libcst as cst
 
 from ..schema_constraints import PartialSchemaConstraint
 from .column_analyzer import ColumnAnalyzer
 from .operation_analyzer import OperationAnalyzer
-from .type_inference import TypeInferenceEngine
 from .schema_inference import ConstraintGenerator
+from .type_inference import TypeInferenceEngine
 
 
 def analyze_function(func: Callable) -> PartialSchemaConstraint:
@@ -26,47 +27,47 @@ def analyze_function(func: Callable) -> PartialSchemaConstraint:
     Returns:
         PartialSchemaConstraint with inferred requirements and transformations
     """
+    # try:
+    # Extract function source code
+    source = inspect.getsource(func)
+
+    # Parse with LibCST
     try:
-        # Extract function source code
-        source = inspect.getsource(func)
-
-        # Parse with LibCST
-        try:
-            tree = cst.parse_module(source)
-        except Exception as e:
-            # If we can't parse the source, return empty constraint
-            constraint = PartialSchemaConstraint(
-                analysis_method="static_analysis",
-            )
-            constraint.add_warning(f"Could not parse function source: {e}")
-            return constraint
-
-        # Initialize analyzers
-        column_analyzer = ColumnAnalyzer()
-        operation_analyzer = OperationAnalyzer()
-        type_engine = TypeInferenceEngine()
-        constraint_generator = ConstraintGenerator()
-
-        # Visit the tree with our analyzers
-        wrapper = AnalysisWrapper(column_analyzer, operation_analyzer, type_engine)
-        tree.visit(wrapper)
-        # Generate final constraint
-        constraint = constraint_generator.generate_constraint(
-            operations=operation_analyzer.operations,
-            column_references=column_analyzer.column_references,
-            type_info=type_engine.type_mappings,
-            source_analysis=wrapper.get_analysis_summary(),
-        )
-
-        return constraint
-
+        tree = cst.parse_module(source)
     except Exception as e:
-        # Fallback for any unexpected errors
+        # If we can't parse the source, return empty constraint
         constraint = PartialSchemaConstraint(
             analysis_method="static_analysis",
         )
-        constraint.add_warning(f"Analysis failed: {e}")
+        constraint.add_warning(f"Could not parse function source: {e}")
         return constraint
+
+    # Initialize analyzers
+    column_analyzer = ColumnAnalyzer()
+    operation_analyzer = OperationAnalyzer()
+    type_engine = TypeInferenceEngine()
+    constraint_generator = ConstraintGenerator()
+
+    # Visit the tree with our analyzers
+    wrapper = AnalysisWrapper(column_analyzer, operation_analyzer, type_engine)
+    tree.visit(wrapper)
+    # Generate final constraint
+    constraint = constraint_generator.generate_constraint(
+        operations=operation_analyzer.operations,
+        column_references=column_analyzer.column_references,
+        type_info=type_engine.type_mappings,
+        source_analysis=wrapper.get_analysis_summary(),
+    )
+
+    return constraint
+
+    # except Exception as e:
+    #     # Fallback for any unexpected errors
+    #     constraint = PartialSchemaConstraint(
+    #         analysis_method="static_analysis",
+    #     )
+    #     constraint.add_warning(f"Analysis failed: {e}")
+    #     return constraint
 
 
 class AnalysisWrapper(cst.CSTVisitor):

@@ -5,9 +5,10 @@ This module analyzes PySpark DataFrame operations to understand the structure
 and flow of data transformations in transform functions.
 """
 
-import libcst as cst
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
+
+import libcst as cst
 
 
 @dataclass
@@ -316,73 +317,7 @@ def find_dataframe_operations(source_code: str) -> dict[str, Any]:
     Returns:
         Dictionary with analysis results
     """
-    try:
-        tree = cst.parse_module(source_code)
-        analyzer = OperationAnalyzer()
-        tree.visit(analyzer)
-        return analyzer.get_analysis_summary()
-    except Exception as e:
-        return {
-            "error": str(e),
-            "total_operations": 0,
-            "operation_types": [],
-            "method_names": [],
-            "operations": [],
-        }
-
-
-def find_operations(source_code: str) -> list[dict[str, Any]]:
-    """
-    Find operations in PySpark source code (test-compatible interface).
-
-    Args:
-        source_code: Python source code to analyze
-
-    Returns:
-        List of operation dictionaries
-    """
-    try:
-        if "withColumn" in source_code:
-            # Parse withColumn operations
-            if "current_timestamp" in source_code:
-                return [
-                    {
-                        "type": "withColumn",
-                        "column_name": "new_col",  # Extract from source
-                        "expression": "F.current_timestamp()",
-                    },
-                ]
-            else:
-                return [
-                    {
-                        "type": "withColumn",
-                        "column_name": "amount",  # Extract from source
-                        "expression": "df.amount * scale",
-                    },
-                ]
-        elif "filter" in source_code:
-            return [
-                {
-                    "type": "filter",
-                    "condition": "df.status == 'active'",
-                    "referenced_columns": ["status"],
-                },
-            ]
-        elif "select" in source_code:
-            return [
-                {
-                    "type": "select",
-                    "selected_columns": ["customer_id", "name", "email"],
-                },
-            ]
-        elif "drop" in source_code:
-            return [
-                {
-                    "type": "drop",
-                    "dropped_columns": ["temp_staging_column"],
-                },
-            ]
-        else:
-            return []
-    except Exception:
-        return []
+    tree = cst.parse_module(source_code)
+    analyzer = OperationAnalyzer()
+    tree.visit(analyzer)
+    return analyzer.get_analysis_summary()
