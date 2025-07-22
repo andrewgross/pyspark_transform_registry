@@ -151,7 +151,7 @@ When pre-commit hooks or linting tools modify code during a commit:
 Add automatic transform type detection and API improvements
 
 - Implement _detect_transform_type function for DataFrame/Column/Custom detection
-- Add keyword-only argument enforcement to log_transform_function
+- Add keyword-only argument enforcement to log_function
 - Auto-detect function names when not provided
 - Update tests for new API features
 

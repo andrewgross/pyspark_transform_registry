@@ -6,6 +6,11 @@ analysis, and type inference to generate comprehensive schema constraints.
 """
 
 from typing import Any
+
+from pyspark_transform_registry.static_analysis.column_analyzer import ColumnReference
+from pyspark_transform_registry.static_analysis.operation_analyzer import (
+    DataFrameOperation,
+)
 from ..schema_constraints import (
     PartialSchemaConstraint,
     ColumnRequirement,
@@ -31,8 +36,8 @@ class ConstraintGenerator:
 
     def generate_constraint(
         self,
-        operations: list[dict[str, Any]],
-        column_references: dict[str, Any],
+        operations: list[DataFrameOperation],
+        column_references: list[ColumnReference],
         type_info: dict[str, Any],
         source_analysis: dict[str, Any],
     ) -> PartialSchemaConstraint:
@@ -54,9 +59,15 @@ class ConstraintGenerator:
         )
 
         # Extract column information
-        read_columns = set(column_references.get("read_columns", []))
-        written_columns = set(column_references.get("written_columns", []))
-        conditional_columns = set(column_references.get("conditional_columns", []))
+        read_columns = {
+            c.column_name for c in column_references if c.access_type == "read"
+        }
+        written_columns = {
+            c.column_name for c in column_references if c.access_type == "write"
+        }
+        conditional_columns = {
+            c.column_name for c in column_references if c.access_type == "conditional"
+        }
 
         # Analyze operations to understand transformations
         operation_analysis = self._analyze_operations(operations)
@@ -93,7 +104,10 @@ class ConstraintGenerator:
 
         return constraint
 
-    def _analyze_operations(self, operations: list[dict[str, Any]]) -> dict[str, Any]:
+    def _analyze_operations(
+        self,
+        operations: list[DataFrameOperation],
+    ) -> dict[str, Any]:
         """Analyze operations to understand their impact."""
         analysis = {
             "withColumn_ops": [],
@@ -109,7 +123,7 @@ class ConstraintGenerator:
         }
 
         for op in operations:
-            method = op.get("method", "")
+            method = op.method_name
 
             if method == "withColumn":
                 analysis["withColumn_ops"].append(op)
@@ -128,7 +142,7 @@ class ConstraintGenerator:
             elif method in ["join", "crossJoin"]:
                 analysis["has_joins"] = True
 
-            if op.get("affects_schema", False):
+            if op.affects_schema():
                 analysis["schema_changing"].append(op)
 
         return analysis
@@ -138,7 +152,7 @@ class ConstraintGenerator:
         read_columns: set[str],
         conditional_columns: set[str],
         type_info: dict[str, Any],
-        operation_analysis: dict[str, Any],
+        operation_analysis: dict[str, DataFrameOperation],
     ) -> list[ColumnRequirement]:
         """Generate required column constraints."""
         required_columns = []
@@ -149,8 +163,8 @@ class ConstraintGenerator:
         # Remove columns that are created within the function
         created_columns = set()
         for op in operation_analysis["withColumn_ops"]:
-            if op.get("args") and len(op["args"]) > 0:
-                created_columns.add(op["args"][0])
+            if op.args:
+                created_columns.add(op.args[0])
 
         actual_required = all_required - created_columns
 
@@ -179,10 +193,10 @@ class ConstraintGenerator:
 
     def _generate_transformations(
         self,
-        operations: list[dict[str, Any]],
+        operations: list[DataFrameOperation],
         written_columns: set[str],
         type_info: dict[str, Any],
-        operation_analysis: dict[str, Any],
+        operation_analysis: dict[str, DataFrameOperation],
     ) -> dict[str, list]:
         """Generate column transformation constraints."""
         transformations = {
@@ -196,8 +210,8 @@ class ConstraintGenerator:
 
         # Process withColumn operations
         for op in operation_analysis["withColumn_ops"]:
-            if len(op.get("args", [])) >= 1:
-                col_name = op["args"][0]
+            if op.args:
+                col_name = op.args[0]
                 col_type = self._get_column_type(col_name, type_info)
 
                 # For now, assume new columns unless we have evidence otherwise
@@ -213,7 +227,7 @@ class ConstraintGenerator:
 
         # Process drop operations
         for op in operation_analysis["drop_ops"]:
-            for arg in op.get("args", []):
+            for arg in op.args:
                 if isinstance(arg, str) and arg not in ["<expression>", "<unknown>"]:
                     transformations["removed"].append(arg)
 
@@ -228,7 +242,7 @@ class ConstraintGenerator:
             # Aggregations typically change the schema significantly
             for op in operation_analysis["agg_ops"]:
                 # Try to infer aggregated columns from operation
-                for arg in op.get("args", []):
+                for arg in op.args:
                     if "." in arg and arg.endswith(")"):
                         # This might be something like "sum(amount)"
                         # Extract the function name for type inference
@@ -292,7 +306,7 @@ class ConstraintGenerator:
 
     def _generate_warnings(
         self,
-        operations: list[dict[str, Any]],
+        operations: list[DataFrameOperation],
         source_analysis: dict[str, Any],
         type_info: dict[str, Any],
     ) -> list[str]:
@@ -316,12 +330,12 @@ class ConstraintGenerator:
             )
 
         # Join warnings
-        has_joins = any(op.get("type") == "join" for op in operations)
+        has_joins = any(op.operation_type == "join" for op in operations)
         if has_joins:
             warnings.append("Join operations detected - schema changes may be complex")
 
         # Aggregation warnings
-        has_agg = any(op.get("method") in ["groupBy", "agg"] for op in operations)
+        has_agg = any(op.operation_type in ["groupBy", "agg"] for op in operations)
         if has_agg:
             warnings.append(
                 "Aggregation operations detected - output schema may differ significantly from input",
@@ -331,8 +345,8 @@ class ConstraintGenerator:
 
 
 def generate_constraint_from_function(
-    operations: list[dict[str, Any]],
-    column_references: dict[str, Any],
+    operations: list[DataFrameOperation],
+    column_references: list[ColumnReference],
     type_info: dict[str, Any],
     source_analysis: dict[str, Any],
 ) -> PartialSchemaConstraint:
@@ -361,8 +375,8 @@ def generate_constraint_from_function(
 
 
 def generate_constraint(
-    operations: list[dict[str, Any]],
-    column_references: list[str],
+    operations: list[DataFrameOperation],
+    column_references: list[ColumnReference],
 ) -> PartialSchemaConstraint:
     """
     Generate constraint from operations and column references (test-compatible interface).
@@ -387,12 +401,12 @@ def generate_constraint(
 
     # Process operations
     for op in operations:
-        if op.get("type") == "withColumn":
-            col_name = op.get("column_name", "new_col")
-            col_type = op.get("expression_type", "timestamp")
+        if op.operation_type == "withColumn":
+            col_name = op.args[0]
+            col_type = op.args[1]
             added_columns.append(ColumnTransformation(col_name, "add", col_type))
-        elif op.get("type") == "drop":
-            removed_columns.extend(op.get("columns", ["temp_col"]))
+        elif op.operation_type == "drop":
+            removed_columns.extend(op.args)
 
     return PartialSchemaConstraint(
         required_columns=required_columns,

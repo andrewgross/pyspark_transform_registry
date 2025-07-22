@@ -52,6 +52,7 @@ result = clean_data_func(your_dataframe)
 - **Runtime Validation**: Automatic schema inference and DataFrame validation before execution
 - **Type Safety**: Validate input DataFrames against inferred schema constraints
 - **Flexible Validation**: Support for both strict and permissive validation modes
+- **Source Code Inspection**: Access original function source code and metadata for debugging
 
 ## Usage Examples
 
@@ -195,6 +196,32 @@ filter_func = load_function("retail.filtering.filter_by_category", version=1)
 electronics = filter_func(orders_df, params={"category": "electronics", "min_amount": 100.0})
 ```
 
+### Source Code Inspection
+
+The loaded functions provide access to the original transform source code for debugging and understanding:
+
+```python
+# Load a function
+transform = load_function("retail.processing.process_orders", version=1)
+
+# Get the original source code
+source_code = transform.get_source()
+print(source_code)  # Shows the original function definition
+
+# Get the original function for advanced inspection
+original_func = transform.get_original_function()
+print(f"Function name: {original_func.__name__}")
+print(f"Docstring: {original_func.__doc__}")
+
+# Use inspect on the original function
+import inspect
+signature = inspect.signature(original_func)
+print(f"Signature: {signature}")
+
+# Note: inspect.getsource(transform) shows wrapper code
+# transform.get_source() shows the original function code
+```
+
 ## API Reference
 
 ### `register_function()`
@@ -231,6 +258,8 @@ Load a previously registered PySpark transform function with optional validation
 - `Callable`: The loaded transform function that supports both single and multi-parameter usage:
   - Single param: `transform(df)`
   - Multi param: `transform(df, params={'param1': value1, 'param2': value2})`
+  - Source inspection: `transform.get_source()` - Returns the original function source code
+  - Function access: `transform.get_original_function()` - Returns the unwrapped original function
 
 ### Model Discovery
 

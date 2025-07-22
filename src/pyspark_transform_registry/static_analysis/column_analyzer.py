@@ -23,6 +23,9 @@ class ColumnReference:
         self.line_number = line_number
         self.context = None  # Additional context about the reference
 
+    def __repr__(self):
+        return f"ColumnReference(column_name={self.column_name}, access_type={self.access_type})"
+
 
 class ColumnAnalyzer(cst.CSTVisitor):
     """

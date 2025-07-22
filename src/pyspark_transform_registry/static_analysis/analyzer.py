@@ -50,7 +50,6 @@ def analyze_function(func: Callable) -> PartialSchemaConstraint:
         # Visit the tree with our analyzers
         wrapper = AnalysisWrapper(column_analyzer, operation_analyzer, type_engine)
         tree.visit(wrapper)
-
         # Generate final constraint
         constraint = constraint_generator.generate_constraint(
             operations=operation_analyzer.operations,

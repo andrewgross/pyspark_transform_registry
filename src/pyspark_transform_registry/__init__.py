@@ -23,21 +23,6 @@ from .metadata import _resolve_fully_qualified_name
 from .validation import validate_transform_input
 
 
-# Backwards compatibility aliases with deprecation warnings
-def log_transform_function(*args, **kwargs) -> Any:
-    """
-    DEPRECATED: Use register_function() instead.
-
-    This function will be removed in a future version.
-    """
-    warnings.warn(
-        "log_transform_function is deprecated. Use register_function() instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return register_function(*args, **kwargs)
-
-
 def find_transform_versions(*args, **kwargs) -> Any:
     """
     DEPRECATED: This function has been removed.
@@ -61,10 +46,8 @@ __all__ = [
     "register_function",
     "load_function",
     "PySparkTransformModel",
-    # Backwards compatibility
-    "log_transform_function",
-    "load_transform_function",
-    "find_transform_versions",
     "_resolve_fully_qualified_name",
     "validate_transform_input",
+    # Backwards compatibility
+    "find_transform_versions",
 ]

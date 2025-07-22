@@ -127,36 +127,6 @@ def register_function(
         "tags": tags or {},
     }
 
-    # Add input example and infer signature if provided
-    if input_example is not None:
-        try:
-            # Convert Spark DataFrame to pandas for MLflow
-            pandas_input_example = input_example.toPandas()
-            log_params["input_example"] = pandas_input_example
-
-            # Infer signature using original DataFrames
-            # For multi-parameter functions, use example_params if provided
-            if example_params is not None:
-                output_example = model.predict(input_example, params=example_params)
-                pandas_output_example = output_example.toPandas()
-                # Include params in signature for multi-parameter functions
-                log_params["signature"] = mlflow.models.infer_signature(
-                    pandas_input_example,
-                    pandas_output_example,
-                    params=example_params,
-                )
-            else:
-                output_example = model.predict(input_example)
-                pandas_output_example = output_example.toPandas()
-                log_params["signature"] = mlflow.models.infer_signature(
-                    pandas_input_example,
-                    pandas_output_example,
-                )
-        except Exception as e:
-            # If pandas conversion fails, skip input example but log without it
-            logger.warning("Could not convert input example to pandas, skipping: %s", e)
-            pass
-
     # Add description as metadata
     if description:
         log_params["tags"]["description"] = description
@@ -217,8 +187,8 @@ def register_function(
                 mlflow.set_tag(tag_key, tag_value)
 
             # Use a simple artifact name but register with the full name
-            artifact_name = func.__name__ if func else function_name
-            mlflow.pyfunc.log_model(artifact_path=artifact_name, **log_params)
+            _name = func.__name__ if func else function_name
+            mlflow.pyfunc.log_model(name=_name, **log_params)
 
     # Return the model URI string
     return f"models:/{name}/1"
@@ -244,6 +214,10 @@ def load_function(
         - Single param: transform(df)
         - Multi param: transform(df, params={'param1': value1, 'param2': value2})
 
+        The returned function also has additional methods:
+        - transform.get_source(): Returns the source code of the original function
+        - transform.get_original_function(): Returns the unwrapped original function
+
         If validation is enabled, input DataFrames will be validated against the
         stored schema constraints before transformation.
 
@@ -256,6 +230,14 @@ def load_function(
 
         # Use with multiple parameters (validates input automatically)
         >>> result = transform(df, params={'min_value': 10, 'threshold': 0.5})
+
+        # Inspect the original source code
+        >>> print(transform.get_source())
+
+        # Get the original function for advanced inspection
+        >>> original_func = transform.get_original_function()
+        >>> import inspect
+        >>> print(inspect.signature(original_func))
 
         # Load specific version without validation
         >>> transform = load_function("my_catalog.my_schema.my_transform", version=2, validate_input=False)
@@ -318,6 +300,31 @@ def load_function(
         else:
             # Multi-parameter function call
             return original_func(df, **params)
+
+    # Add methods to access the original function and its source
+    def get_source():
+        """
+        Get the source code of the original transform function.
+
+        Returns:
+            str: Source code of the original function
+        """
+        import inspect
+
+        return inspect.getsource(original_func)
+
+    def get_original_function():
+        """
+        Get the original transform function (unwrapped).
+
+        Returns:
+            Callable: The original transform function
+        """
+        return original_func
+
+    # Attach methods to the wrapper function
+    transform_wrapper.get_source = get_source
+    transform_wrapper.get_original_function = get_original_function
 
     return transform_wrapper
 

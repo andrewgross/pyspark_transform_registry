@@ -153,7 +153,7 @@ def main():
         )
         print("✅ Function loaded successfully")
         print()
-        print(inspect.getsource(loaded_function))
+        print(loaded_function.get_source())
         print()
 
         print("\n5️⃣ TESTING LOADED FUNCTION")
