@@ -479,7 +479,6 @@ class TestEdgeCaseDetection:
             "pyspark_transform_registry.static_analysis.analyzer.analyze_function",
         ) as mock_analyze:
             mock_constraint = PartialSchemaConstraint(
-                confidence="low",
                 warnings=expected_warnings,
             )
             mock_analyze.return_value = mock_constraint
@@ -490,7 +489,6 @@ class TestEdgeCaseDetection:
             analyzer.analyze_function.return_value = mock_constraint
 
             result = analyzer.analyze_function(source)
-            assert result.confidence == "low"
             assert expected_warnings[0] in result.warnings
 
     def test_detect_udf_usage(self):
@@ -511,7 +509,6 @@ class TestEdgeCaseDetection:
             mock_constraint = PartialSchemaConstraint(
                 required_columns=[ColumnRequirement("amount", "double")],
                 added_columns=[ColumnTransformation("result", "add", "boolean")],
-                confidence="low",
                 warnings=expected_warnings,
             )
             mock_analyze.return_value = mock_constraint
@@ -522,7 +519,6 @@ class TestEdgeCaseDetection:
             analyzer.analyze_function.return_value = mock_constraint
 
             result = analyzer.analyze_function(source)
-            assert result.confidence == "low"
             assert expected_warnings[0] in result.warnings
 
     def test_detect_unparseable_code(self):
@@ -532,9 +528,7 @@ class TestEdgeCaseDetection:
         with patch(
             "pyspark_transform_registry.static_analysis.analyzer.analyze_function",
         ) as mock_analyze:
-            # Should return low-confidence constraint with warnings
             mock_constraint = PartialSchemaConstraint(
-                confidence="low",
                 warnings=["Could not parse function source - manual analysis required"],
             )
             mock_analyze.return_value = mock_constraint
@@ -545,7 +539,6 @@ class TestEdgeCaseDetection:
             analyzer.analyze_function.return_value = mock_constraint
 
             result = analyzer.analyze_function(source)
-            assert result.confidence == "low"
             assert "Could not parse function source" in result.warnings[0]
 
 
@@ -578,7 +571,6 @@ class TestConstraintGeneration:
             ],
             removed_columns=["temp_col"],
             preserves_other_columns=True,
-            confidence="high",
         )
 
         with patch(
@@ -596,55 +588,3 @@ class TestConstraintGeneration:
             assert len(result.required_columns) == 2
             assert len(result.added_columns) == 1
             assert len(result.removed_columns) == 1
-            assert result.confidence == "high"
-
-    def test_generate_constraint_confidence_levels(self):
-        """Test constraint generation with different confidence levels."""
-        confidence_cases = [
-            # Simple operations -> high confidence
-            (
-                {
-                    "operations": [{"type": "withColumn"}],
-                    "udf_count": 0,
-                    "dynamic_ops": 0,
-                },
-                "high",
-            ),
-            # UDF usage -> low confidence
-            (
-                {
-                    "operations": [{"type": "withColumn"}],
-                    "udf_count": 1,
-                    "dynamic_ops": 0,
-                },
-                "low",
-            ),
-            # Dynamic operations -> low confidence
-            (
-                {
-                    "operations": [{"type": "withColumn"}],
-                    "udf_count": 0,
-                    "dynamic_ops": 1,
-                },
-                "low",
-            ),
-            # Complex operations -> medium confidence
-            (
-                {"operations": [{"type": "groupBy"}], "udf_count": 0, "dynamic_ops": 0},
-                "medium",
-            ),
-        ]
-
-        for analysis_results, expected_confidence in confidence_cases:
-            with patch(
-                "pyspark_transform_registry.static_analysis.schema_inference.determine_confidence",
-            ) as mock_confidence:
-                mock_confidence.return_value = expected_confidence
-
-                from unittest.mock import MagicMock
-
-                generator = MagicMock()
-                generator.determine_confidence.return_value = expected_confidence
-
-                result = generator.determine_confidence(analysis_results)
-                assert result == expected_confidence

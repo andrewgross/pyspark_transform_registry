@@ -28,12 +28,10 @@ def main():
         ],
         added_columns=[],  # Use empty for now to avoid serialization issues
         preserves_other_columns=False,  # Function only selects specific columns
-        confidence=0.9,  # High confidence
         analysis_method="static_analysis_enhanced",
     )
 
     print("✅ Schema constraint created!")
-    print(f"   Confidence: {constraint.confidence}")
     print(f"   Analysis Method: {constraint.analysis_method}")
     print(f"   Preserves Other Columns: {constraint.preserves_other_columns}")
 
@@ -57,7 +55,6 @@ def main():
     print(json.dumps(constraint_dict, indent=2))
 
     print("\n🏷️  Additional MLflow tags:")
-    print(f"   schema_confidence: {constraint.confidence}")
     print(f"   schema_analysis_method: {constraint.analysis_method}")
     print(f"   schema_required_columns: {len(constraint.required_columns)}")
     print(f"   schema_added_columns: {len(constraint.added_columns)}")
@@ -71,9 +68,7 @@ def main():
     loaded_constraint = PartialSchemaConstraint.from_json(constraint_json)
 
     print("✅ Constraint loaded successfully!")
-    print(
-        f"   Confidence matches: {constraint.confidence == loaded_constraint.confidence}",
-    )
+    print(f"   Analysis Method: {loaded_constraint.analysis_method}")
     print(f"   Required columns: {len(loaded_constraint.required_columns)}")
     print(f"   Added columns: {len(loaded_constraint.added_columns)}")
 
@@ -173,7 +168,6 @@ def main():
     print("   ✅ Machine-to-machine operation without human intervention")
     print("   ✅ Detailed error messages for debugging")
     print("   ✅ Version compatibility across system upgrades")
-    print("   ✅ Confidence levels for analysis quality assessment")
     print("   ✅ Flexible validation modes for different use cases")
 
 

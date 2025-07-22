@@ -24,7 +24,6 @@ EXPECTED_ADD_TIMESTAMP = PartialSchemaConstraint(
     required_columns=[],
     added_columns=[ColumnTransformation("created_at", "add", "timestamp", False)],
     preserves_other_columns=True,
-    confidence="high",
 )
 
 
@@ -38,7 +37,6 @@ EXPECTED_NORMALIZE_AMOUNTS = PartialSchemaConstraint(
     required_columns=[ColumnRequirement("amount", "double", nullable=True)],
     modified_columns=[ColumnTransformation("amount", "modify", "double")],
     preserves_other_columns=True,
-    confidence="high",
 )
 
 
@@ -53,7 +51,6 @@ def filter_active(df: DataFrame, *, statuses: list = None) -> DataFrame:
 EXPECTED_FILTER_ACTIVE = PartialSchemaConstraint(
     required_columns=[ColumnRequirement("status", "string", nullable=True)],
     preserves_other_columns=True,
-    confidence="high",
 )
 
 
@@ -76,7 +73,6 @@ EXPECTED_SELECT_CUSTOMER_INFO = PartialSchemaConstraint(
         ColumnRequirement("phone", "string", nullable=True),
     ],
     preserves_other_columns=False,  # select() doesn't preserve other columns
-    confidence="medium",  # Conditional logic makes inference harder
 )
 
 
@@ -105,7 +101,6 @@ EXPECTED_CUSTOMER_ANALYTICS = PartialSchemaConstraint(
     ],
     removed_columns=["temp_staging_column"],
     preserves_other_columns=True,
-    confidence="high",
 )
 
 
@@ -119,7 +114,6 @@ EXPECTED_CLEAN_TEXT_DATA = PartialSchemaConstraint(
     required_columns=[ColumnRequirement("description", "string", nullable=True)],
     modified_columns=[ColumnTransformation("description", "modify", "string")],
     preserves_other_columns=True,
-    confidence="high",
 )
 
 
@@ -147,7 +141,6 @@ EXPECTED_CALCULATE_METRICS = PartialSchemaConstraint(
         ColumnTransformation("margin", "add", "double", nullable=True),
     ],
     preserves_other_columns=True,
-    confidence="high",
 )
 
 
@@ -178,7 +171,6 @@ EXPECTED_ADD_CATEGORY_FLAGS = PartialSchemaConstraint(
         ColumnTransformation("is_basic", "add", "boolean", nullable=False),
     ],
     preserves_other_columns=True,
-    confidence="medium",  # Dynamic column names are harder to analyze
 )
 
 
@@ -212,7 +204,6 @@ EXPECTED_SUMMARIZE_BY_GROUP = PartialSchemaConstraint(
         ColumnTransformation("min_value", "add", "double", nullable=True),
     ],
     preserves_other_columns=False,  # groupBy changes the schema structure
-    confidence="medium",
 )
 
 
@@ -241,7 +232,6 @@ EXPECTED_APPLY_BUSINESS_LOGIC = PartialSchemaConstraint(
         ColumnTransformation("high_value_flag", "add", "boolean", nullable=True),
     ],
     preserves_other_columns=True,
-    confidence="low",  # UDFs are hard to analyze statically
     warnings=["Contains UDF - static analysis may be incomplete"],
 )
 
@@ -276,7 +266,6 @@ def dynamic_column_transform(df: DataFrame, *, columns: list = None) -> DataFram
 EXPECTED_DYNAMIC_COLUMN = PartialSchemaConstraint(
     required_columns=[],  # Can't determine statically
     preserves_other_columns=True,
-    confidence="low",
     warnings=["Dynamic column operations detected - manual verification recommended"],
 )
 

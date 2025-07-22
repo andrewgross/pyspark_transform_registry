@@ -151,7 +151,7 @@ not_a_function = "this is a string, not a function"
         )
 
         # Function should still be loadable and work
-        loaded_func = load_function("test.error.schema_inference_failure")
+        loaded_func = load_function("test.error.schema_inference_failure", version=1)
 
         test_df = spark.createDataFrame([(1, 100)], ["id", "amount"])
         result = loaded_func(test_df)
@@ -172,7 +172,7 @@ not_a_function = "this is a string, not a function"
         )
 
         # Function should still be loadable and work
-        loaded_func = load_function("test.error.invalid_input_example")
+        loaded_func = load_function("test.error.invalid_input_example", version=1)
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         result = loaded_func(test_df)
         assert result.count() == 1
@@ -194,7 +194,7 @@ not_a_function = "this is a string, not a function"
         )
 
         # Function should still be loadable
-        loaded_func = load_function("test.error.mismatched_params")
+        loaded_func = load_function("test.error.mismatched_params", version=1)
         result = loaded_func(test_df, params={"required_param": "correct"})
         assert result.count() == 1
 
@@ -206,7 +206,7 @@ class TestLoadingErrorHandling:
         """Test loading a function that doesn't exist."""
 
         with pytest.raises(Exception):  # Should raise MLflow exception
-            load_function("nonexistent.function.name")
+            load_function("nonexistent.function.name", version=1)
 
     def test_load_invalid_version(self, spark, mlflow_tracking):
         """Test loading with invalid version numbers."""
@@ -231,7 +231,7 @@ class TestLoadingErrorHandling:
 
         # Note: Simulating actual corruption is complex with MLflow's storage format
         # But we can test that the function loads and basic functionality works
-        loaded_func = load_function("test.error.corrupted_model")
+        loaded_func = load_function("test.error.corrupted_model", version=1)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         result = loaded_func(test_df)
@@ -255,7 +255,7 @@ class TestLoadingErrorHandling:
         )
 
         # Should load and work normally
-        loaded_func = load_function("test.error.malformed_constraint")
+        loaded_func = load_function("test.error.malformed_constraint", version=1)
 
         # Test with DataFrame that has the required column
         test_df = spark.createDataFrame([(1, "test")], ["id", "test_col"])
@@ -265,6 +265,7 @@ class TestLoadingErrorHandling:
         # Test with validation disabled (should work even with missing columns)
         loaded_func_no_validation = load_function(
             "test.error.malformed_constraint",
+            version=1,
             validate_input=False,
         )
         test_df_missing = spark.createDataFrame([(1, "test")], ["id", "value"])
@@ -280,7 +281,7 @@ class TestLoadingErrorHandling:
         register_function(func=test_function, name="test.error.missing_metadata")
 
         # Function should still load and work despite missing metadata
-        loaded_func = load_function("test.error.missing_metadata", validate_input=False)
+        loaded_func = load_function("test.error.missing_metadata", version=1, validate_input=False)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         result = loaded_func(test_df)
@@ -303,7 +304,7 @@ class TestRuntimeValidationErrorHandling:
         )
 
         # Should load without validation errors
-        loaded_func = load_function("test.error.null_constraint", validate_input=True)
+        loaded_func = load_function("test.error.null_constraint", version=1, validate_input=True)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         result = loaded_func(test_df)
@@ -325,7 +326,7 @@ class TestRuntimeValidationErrorHandling:
             schema_constraint=constraint,
         )
 
-        loaded_func = load_function("test.error.empty_df_validation")
+        loaded_func = load_function("test.error.empty_df_validation", version=1)
 
         # Test with empty DataFrame
         empty_df = spark.createDataFrame(
@@ -364,7 +365,7 @@ class TestRuntimeValidationErrorHandling:
             schema_constraint=constraint,
         )
 
-        loaded_func = load_function("test.error.malformed_df_validation")
+        loaded_func = load_function("test.error.malformed_df_validation", version=1)
 
         # Test with DataFrame missing required columns
         malformed_df = spark.createDataFrame([(1,)], ["only_one_column"])
@@ -399,7 +400,7 @@ class TestDataFrameErrorHandling:
             infer_schema=False,
         )
 
-        loaded_func = load_function("test.error.missing_columns", validate_input=False)
+        loaded_func = load_function("test.error.missing_columns", version=1, validate_input=False)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
 
@@ -419,7 +420,7 @@ class TestDataFrameErrorHandling:
             infer_schema=False,
         )
 
-        loaded_func = load_function("test.error.type_mismatch", validate_input=False)
+        loaded_func = load_function("test.error.type_mismatch", version=1, validate_input=False)
 
         # DataFrame with string where numeric expected
         test_df = spark.createDataFrame([(1, "not_a_number")], ["id", "amount"])
@@ -451,7 +452,7 @@ class TestDataFrameErrorHandling:
             infer_schema=False,
         )
 
-        loaded_func = load_function("test.error.null_handling", validate_input=False)
+        loaded_func = load_function("test.error.null_handling", version=1, validate_input=False)
 
         # DataFrame with null values
         test_df = spark.createDataFrame([(1, None), (2, "test")], ["id", "text"])
@@ -476,7 +477,7 @@ class TestDataFrameErrorHandling:
             infer_schema=False,
         )
 
-        loaded_func = load_function("test.error.large_dataframe", validate_input=False)
+        loaded_func = load_function("test.error.large_dataframe", version=1, validate_input=False)
 
         # Test with empty DataFrame
         empty_df = spark.createDataFrame(
@@ -505,6 +506,7 @@ class TestParameterErrorHandling:
 
         loaded_func = load_function(
             "test.error.missing_required_params",
+            version=1,
             validate_input=False,
         )
 
@@ -528,6 +530,7 @@ class TestParameterErrorHandling:
 
         loaded_func = load_function(
             "test.error.invalid_param_types",
+            version=1,
             validate_input=False,
         )
 
@@ -557,7 +560,7 @@ class TestParameterErrorHandling:
             infer_schema=False,
         )
 
-        loaded_func = load_function("test.error.extra_params", validate_input=False)
+        loaded_func = load_function("test.error.extra_params", version=1, validate_input=False)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
 
@@ -582,7 +585,7 @@ class TestNetworkAndResourceErrors:
         register_function(func=test_function, name="test.error.connection_issues")
 
         # Test loading should work with normal connection
-        loaded_func = load_function("test.error.connection_issues")
+        loaded_func = load_function("test.error.connection_issues", version=1)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         result = loaded_func(test_df)
@@ -605,7 +608,7 @@ class TestNetworkAndResourceErrors:
         )
 
         # Loading with validation should handle client failures gracefully
-        loaded_func = load_function("test.error.client_failures", validate_input=True)
+        loaded_func = load_function("test.error.client_failures", version=1, validate_input=True)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         # Should work despite client issues (validation will be skipped)
@@ -627,6 +630,7 @@ class TestNetworkAndResourceErrors:
 
         loaded_func = load_function(
             "test.error.memory_constraints",
+            version=1,
             validate_input=False,
         )
 
@@ -651,7 +655,7 @@ class TestEdgeCaseInputs:
             infer_schema=False,
         )
 
-        loaded_func = load_function("test.error.unicode_handling", validate_input=False)
+        loaded_func = load_function("test.error.unicode_handling", version=1, validate_input=False)
 
         # Test with various Unicode characters
         unicode_df = spark.createDataFrame(
@@ -676,7 +680,7 @@ class TestEdgeCaseInputs:
             infer_schema=False,
         )
 
-        loaded_func = load_function("test.error.long_strings", validate_input=False)
+        loaded_func = load_function("test.error.long_strings", version=1, validate_input=False)
 
         # Test with very long string
         long_string = "a" * 10000  # 10K character string
@@ -698,7 +702,7 @@ class TestEdgeCaseInputs:
             infer_schema=False,
         )
 
-        loaded_func = load_function("test.error.extreme_numerics", validate_input=False)
+        loaded_func = load_function("test.error.extreme_numerics", version=1, validate_input=False)
 
         # Test with extreme values
         extreme_df = spark.createDataFrame(

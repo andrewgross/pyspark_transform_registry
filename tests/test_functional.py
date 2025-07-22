@@ -41,7 +41,7 @@ class TestEndToEndWorkflow:
         assert model_uri is not None
 
         # Load function
-        loaded_transform = load_function("business.finance.amount_processor")
+        loaded_transform = load_function("business.finance.amount_processor", version=1)
 
         # Test original function (verify it works)
         business_logic(test_data, threshold=100)
@@ -73,7 +73,7 @@ class TestEndToEndWorkflow:
         assert model_uri is not None
 
         # Load function
-        loaded_transform = load_function("etl.data.simple_filter")
+        loaded_transform = load_function("etl.data.simple_filter", version=1)
 
         # Test loaded function
         result = loaded_transform(test_data)
@@ -117,10 +117,10 @@ class TestEndToEndWorkflow:
             )
 
         # Load and test individual functions
-        data_cleaner = load_function("pipeline.clean.data_cleaner")
-        feature_engineer = load_function("pipeline.features.feature_engineer")
-        ml_scorer = load_function("pipeline.ml.ml_scorer")
-        full_pipeline = load_function("pipeline.complete.full_pipeline")
+        data_cleaner = load_function("pipeline.clean.data_cleaner", version=1)
+        feature_engineer = load_function("pipeline.features.feature_engineer", version=1)
+        ml_scorer = load_function("pipeline.ml.ml_scorer", version=1)
+        full_pipeline = load_function("pipeline.complete.full_pipeline", version=1)
 
         # Test individual steps
         cleaned = data_cleaner(test_data)
@@ -177,30 +177,30 @@ class TestEndToEndWorkflow:
         )
 
         # Load different versions
-        transform_latest = load_function("test.versioning.transform")
         transform_v1_specific = load_function("test.versioning.transform", version=1)
         transform_v2_specific = load_function("test.versioning.transform", version=2)
+        transform_v3_specific = load_function("test.versioning.transform", version=3)
 
         # Test that they work
-        result_latest = transform_latest(test_data)
         result_v1 = transform_v1_specific(test_data)
         result_v2 = transform_v2_specific(test_data)
+        result_v3 = transform_v3_specific(test_data)
 
-        assert result_latest.count() == 2
         assert result_v1.count() == 2
         assert result_v2.count() == 2
+        assert result_v3.count() == 2
 
         # All should have version column
-        assert "version" in result_latest.columns
         assert "version" in result_v1.columns
         assert "version" in result_v2.columns
+        assert "version" in result_v3.columns
 
     def test_error_handling_workflow(self, spark, mlflow_tracking):
         """Test error handling in the workflow."""
 
         # Test loading non-existent function
         with pytest.raises(Exception):  # MLflow will raise an exception
-            load_function("nonexistent.model.name")
+            load_function("nonexistent.model.name", version=1)
 
         # Test registering with bad file path
         with pytest.raises(FileNotFoundError):
@@ -245,7 +245,7 @@ class TestEndToEndWorkflow:
         )
 
         # Load function
-        loaded_transform = load_function("test.metadata.documented")
+        loaded_transform = load_function("test.metadata.documented", version=1)
 
         # Test that it works
         result = loaded_transform(test_data)

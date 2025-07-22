@@ -43,7 +43,6 @@ def main():
     constraint = analyze_function(customer_risk_assessment)
 
     print("✅ Analysis completed!")
-    print(f"   Confidence: {constraint.confidence}")
     print(f"   Analysis Method: {constraint.analysis_method}")
     print(f"   Preserves Other Columns: {constraint.preserves_other_columns}")
 
@@ -79,7 +78,6 @@ def main():
     # Show what gets stored as MLflow tags
     print("🏷️  MLflow tags that would be stored:")
     print(f"   schema_constraint: {constraint_json[:100]}...")  # Truncated for display
-    print(f"   schema_confidence: {constraint.confidence}")
     print(f"   schema_analysis_method: {constraint.analysis_method}")
     print(f"   schema_required_columns: {len(constraint.required_columns)}")
     print(f"   schema_added_columns: {len(constraint.added_columns)}")
@@ -96,15 +94,11 @@ def main():
     loaded_constraint = PartialSchemaConstraint.from_json(constraint_json)
 
     print("✅ Constraint loaded from JSON successfully!")
-    print(f"   Loaded confidence: {loaded_constraint.confidence}")
     print(f"   Loaded required columns: {len(loaded_constraint.required_columns)}")
     print(f"   Loaded added columns: {len(loaded_constraint.added_columns)}")
 
     # Verify they match
     print("\n🔍 VERIFICATION:")
-    print(
-        f"   Original == Loaded: {constraint.confidence == loaded_constraint.confidence}",
-    )
     print(
         f"   Required columns match: {len(constraint.required_columns) == len(loaded_constraint.required_columns)}",
     )

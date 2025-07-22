@@ -33,7 +33,7 @@ def test_single_parameter_function_registration_and_loading(sample_df, mlflow_tr
     )
 
     # Load the function
-    loaded_transform = load_function("test_registry.simple_transform")
+    loaded_transform = load_function("test_registry.simple_transform", version=1)
 
     # Test single parameter usage
     result = loaded_transform(sample_df)
@@ -64,7 +64,7 @@ def test_multi_parameter_function_registration_and_loading(sample_df, mlflow_tra
     )
 
     # Load the function
-    loaded_transform = load_function("test_registry.filter_transform")
+    loaded_transform = load_function("test_registry.filter_transform", version=1)
 
     # Test single parameter usage (uses defaults)
     result = loaded_transform(sample_df)
@@ -105,7 +105,7 @@ def test_function_with_required_parameters(sample_df, mlflow_tracking):
     )
 
     # Load the function
-    loaded_transform = load_function("test_registry.required_param_transform")
+    loaded_transform = load_function("test_registry.required_param_transform", version=1)
 
     # Test that calling without required params fails appropriately
     with pytest.raises(TypeError):
@@ -143,7 +143,7 @@ def test_mixed_default_and_required_parameters(sample_df, mlflow_tracking):
     )
 
     # Load the function
-    loaded_transform = load_function("test_registry.mixed_param_transform")
+    loaded_transform = load_function("test_registry.mixed_param_transform", version=1)
 
     # Test with required parameter only (should use default for optional)
     result = loaded_transform(sample_df, params={"required_col": "calculated"})
@@ -181,7 +181,7 @@ def test_backward_compatibility_with_existing_functions(sample_df, mlflow_tracki
     )
 
     # Load and use the function
-    loaded_transform = load_function("test_registry.legacy_transform")
+    loaded_transform = load_function("test_registry.legacy_transform", version=1)
 
     # Should work with single parameter
     result = loaded_transform(sample_df)

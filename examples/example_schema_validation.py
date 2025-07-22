@@ -118,7 +118,6 @@ def main():
             constraint = PartialSchemaConstraint.from_json(constraint_json)
 
             print("\n📋 Parsed Schema Constraint:")
-            print(f"   Confidence: {constraint.confidence}")
             print(f"   Analysis Method: {constraint.analysis_method}")
             print(f"   Preserves Other Columns: {constraint.preserves_other_columns}")
 
@@ -227,7 +226,6 @@ def main():
                 ColumnRequirement("final_total", "double"),
             ],
             preserves_other_columns=True,
-            confidence=1.0,  # High confidence - manually specified
             analysis_method="manual_specification",
         )
 
@@ -253,7 +251,6 @@ def main():
         custom_run = client.get_run(custom_version.run_id)
 
         print("📋 Custom Schema Constraint Metadata:")
-        print(f"   Confidence: {custom_run.data.tags.get('schema_confidence', 'N/A')}")
         print(
             f"   Analysis Method: {custom_run.data.tags.get('schema_analysis_method', 'N/A')}",
         )

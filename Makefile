@@ -1,4 +1,4 @@
-.PHONY: test test-verbose lint format check install clean build help
+.PHONY: test test-verbose lint format check install clean build help setup publish
 
 # Default target
 help:
@@ -14,33 +14,44 @@ help:
 
 # Testing
 test:
-	uv run --extra dev pytest
+	uv run --dev pytest
 
 test-verbose:
-	uv run --extra dev pytest -v
+	uv run --dev pytest -v
 
 # Code quality
 lint:
-	uv run --extra dev ruff check --fix
+	uv run --dev ruff check --fix
 
 format:
-	uv run --extra dev ruff format
+	uv run --dev ruff format
 
 check: lint format test
 	@echo "All checks passed!"
 
-# Dependencies
+setup: install
+
 install:
-	uv sync --extra dev
+	uv sync --dev
 
-# Cleanup
-clean:
-	rm -rf dist/
-	rm -rf build/
-	rm -rf *.egg-info/
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
+build: clean
+	@echo "Building package..."
+	uv build
+	@echo "Build complete!"
 
-# Build
-build:
-	uv run python -m build
+publish: build
+	@echo "Publishing package..."
+	uv publish
+	@echo "Publish complete!"
+
+
+clean: 
+	@echo "Cleaning up..."
+	@rm -rf __pycache__/ .pytest_cache/
+	@rm -rf category_indexer/
+	@rm -rf dist/ build/
+	@find . -name "*.pyc" -delete
+	@find . -name "*.pkl" -delete
+	@find . -name "*.egg-info" -type d -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+	@echo "Done!"

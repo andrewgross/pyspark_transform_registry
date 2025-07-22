@@ -153,7 +153,6 @@ class TestPartialSchemaConstraint:
         assert constraint.modified_columns == []
         assert constraint.removed_columns == []
         assert constraint.preserves_other_columns is True
-        assert constraint.confidence == "high"
         assert constraint.analysis_method == "static_analysis"
         assert constraint.warnings == []
 
@@ -172,12 +171,10 @@ class TestPartialSchemaConstraint:
                     nullable=False,
                 ),
             ],
-            confidence="medium",
         )
 
         assert len(constraint.required_columns) == 2
         assert len(constraint.added_columns) == 1
-        assert constraint.confidence == "medium"
 
     def test_constraint_json_serialization(self):
         """Test PartialSchemaConstraint JSON serialization."""
@@ -185,7 +182,6 @@ class TestPartialSchemaConstraint:
             required_columns=[ColumnRequirement("id", "integer")],
             added_columns=[ColumnTransformation("flag", "add", "boolean")],
             removed_columns=["temp"],
-            confidence="high",
             warnings=["Static analysis limitation"],
         )
 
@@ -197,7 +193,6 @@ class TestPartialSchemaConstraint:
         assert len(json_data["required_columns"]) == 1
         assert len(json_data["added_columns"]) == 1
         assert json_data["removed_columns"] == ["temp"]
-        assert json_data["confidence"] == "high"
         assert json_data["warnings"] == ["Static analysis limitation"]
 
         # Test from_json
@@ -209,7 +204,6 @@ class TestPartialSchemaConstraint:
         )
         assert len(reconstructed.added_columns) == len(original.added_columns)
         assert reconstructed.removed_columns == original.removed_columns
-        assert reconstructed.confidence == original.confidence
         assert reconstructed.warnings == original.warnings
 
     def test_add_warning(self):
@@ -270,7 +264,6 @@ class TestPartialSchemaConstraint:
             added_columns=[
                 ColumnTransformation("normalized_amount", "add", "double"),
             ],
-            confidence="high",
         )
 
         constraint2 = PartialSchemaConstraint(
@@ -289,7 +282,6 @@ class TestPartialSchemaConstraint:
                 ColumnTransformation("normalized_amount", "modify", "double"),
             ],
             removed_columns=["temp_col"],
-            confidence="medium",
             warnings=["Complex logic detected"],
         )
 
@@ -313,27 +305,8 @@ class TestPartialSchemaConstraint:
 
         # Check other properties
         assert merged.removed_columns == ["temp_col"]
-        assert merged.confidence == "medium"  # Lower confidence wins
         assert merged.analysis_method == "merged"
         assert "Complex logic detected" in merged.warnings
-
-    def test_constraint_merging_confidence_levels(self):
-        """Test confidence level merging logic."""
-        high_constraint = PartialSchemaConstraint(confidence="high")
-        medium_constraint = PartialSchemaConstraint(confidence="medium")
-        low_constraint = PartialSchemaConstraint(confidence="low")
-
-        # High + Medium = Medium
-        merged = high_constraint.merge_with(medium_constraint)
-        assert merged.confidence == "medium"
-
-        # High + Low = Low
-        merged = high_constraint.merge_with(low_constraint)
-        assert merged.confidence == "low"
-
-        # Medium + Low = Low
-        merged = medium_constraint.merge_with(low_constraint)
-        assert merged.confidence == "low"
 
 
 class TestValidationResult:
@@ -488,7 +461,6 @@ class TestConstraintComplexScenarios:
             ],
             removed_columns=["temp_staging", "debug_info"],
             preserves_other_columns=True,
-            confidence="medium",
             analysis_method="hybrid",
             warnings=["UDF detected", "Complex conditional logic"],
         )
@@ -507,7 +479,6 @@ class TestConstraintComplexScenarios:
         assert (
             reconstructed.preserves_other_columns == constraint.preserves_other_columns
         )
-        assert reconstructed.confidence == constraint.confidence
         assert reconstructed.analysis_method == constraint.analysis_method
         assert reconstructed.warnings == constraint.warnings
 

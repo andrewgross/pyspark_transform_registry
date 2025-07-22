@@ -103,7 +103,7 @@ class TestLoadingWithValidation:
         )
 
         # Load function with validation (default behavior)
-        loaded_transform = load_function(model_name)
+        loaded_transform = load_function(model_name, version=1)
 
         # Should work with valid input
         result = loaded_transform(valid_test_dataframe)
@@ -127,7 +127,7 @@ class TestLoadingWithValidation:
         )
 
         # Load function without validation
-        loaded_transform = load_function(model_name, validate_input=False)
+        loaded_transform = load_function(model_name, version=1, validate_input=False)
 
         # Should work even with invalid input when validation is disabled
         # Note: This will fail at execution time, but not at validation time
@@ -165,7 +165,7 @@ class TestLoadingWithValidation:
         )
 
         # Load function with validation enabled
-        loaded_transform = load_function(model_name, validate_input=True)
+        loaded_transform = load_function(model_name, version=1, validate_input=True)
 
         # Should fail validation with invalid input
         with pytest.raises(ValueError, match="Input validation failed"):
@@ -202,7 +202,7 @@ class TestLoadingWithValidation:
         )
 
         # Load function with validation enabled
-        loaded_transform = load_function(model_name, validate_input=True)
+        loaded_transform = load_function(model_name, version=1, validate_input=True)
 
         # Should fail validation with wrong types
         with pytest.raises(ValueError, match="Input validation failed"):
@@ -241,7 +241,7 @@ class TestLoadingWithValidation:
         )
 
         # Load function with strict validation
-        loaded_transform = load_function(model_name, strict_validation=True)
+        loaded_transform = load_function(model_name, version=1, strict_validation=True)
 
         # Should still work but print warnings (warnings don't fail validation)
         result = loaded_transform(df_with_extra)
@@ -264,7 +264,7 @@ class TestLoadingWithValidation:
         )
 
         # Load function with validation
-        loaded_transform = load_function(model_name, validate_input=True)
+        loaded_transform = load_function(model_name, version=1, validate_input=True)
 
         # Should work with valid input and parameters
         result = loaded_transform(
@@ -288,7 +288,7 @@ class TestLoadingWithValidation:
         )
 
         # Load function - should work without validation since no constraint is stored
-        loaded_transform = load_function(model_name, validate_input=True)
+        loaded_transform = load_function(model_name, version=1, validate_input=True)
 
         # Should work normally without validation
         result = loaded_transform(valid_test_dataframe)
@@ -333,7 +333,7 @@ class TestLoadingWithValidation:
 
         # This test simulates the case where schema constraint loading fails
         # The function should still work, just without validation
-        loaded_transform = load_function(model_name, validate_input=True)
+        loaded_transform = load_function(model_name, version=1, validate_input=True)
 
         # Should work normally
         result = loaded_transform(valid_test_dataframe)
@@ -381,7 +381,7 @@ class TestValidationErrorMessages:
             schema_constraint=constraint,
         )
 
-        loaded_transform = load_function(model_name)
+        loaded_transform = load_function(model_name, version=1)
 
         # Error message should be informative
         with pytest.raises(ValueError) as exc_info:
@@ -429,7 +429,7 @@ class TestValidationErrorMessages:
             schema_constraint=constraint,
         )
 
-        loaded_transform = load_function(model_name)
+        loaded_transform = load_function(model_name, version=1)
 
         # Error message should be informative
         with pytest.raises(ValueError) as exc_info:
@@ -459,7 +459,7 @@ class TestValidationIntegration:
         )
 
         # Load and execute
-        loaded_transform = load_function(model_name)
+        loaded_transform = load_function(model_name, version=1)
         result = loaded_transform(valid_test_dataframe)
 
         # Verify the transformation worked correctly
@@ -492,8 +492,8 @@ class TestValidationIntegration:
         )
 
         # Load function with and without validation
-        transform_with_validation = load_function(model_name, validate_input=True)
-        transform_without_validation = load_function(model_name, validate_input=False)
+        transform_with_validation = load_function(model_name, version=1, validate_input=True)
+        transform_without_validation = load_function(model_name, version=1, validate_input=False)
 
         # Measure execution time with validation
         start_time = time.time()

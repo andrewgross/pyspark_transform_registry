@@ -17,6 +17,7 @@ from pyspark.sql.types import (
     TimestampType,
     DateType,
     BinaryType,
+    LongType,
 )
 
 from .schema_constraints import (
@@ -83,6 +84,13 @@ class RuntimeValidator:
         # Check for unexpected columns (if not preserving other columns)
         if not constraint.preserves_other_columns:
             self._validate_no_unexpected_columns(df_columns, constraint, result)
+
+        # Add constraint warnings to result
+        for warning in constraint.warnings:
+            result.add_warning(
+                message=warning,
+                column_name=None,
+            )
 
         return result
 
@@ -209,7 +217,7 @@ class RuntimeValidator:
             return True
 
         # Numeric compatibility (only between numeric types)
-        numeric_types = {IntegerType, DoubleType}
+        numeric_types = {IntegerType, DoubleType, LongType}
         if type(actual_type) in numeric_types and type(expected_type) in numeric_types:
             return True
 
@@ -221,6 +229,7 @@ class RuntimeValidator:
         type_mapping = {
             StringType: "string",
             IntegerType: "integer",
+            LongType: "long",
             DoubleType: "double",
             BooleanType: "boolean",
             TimestampType: "timestamp",

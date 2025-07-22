@@ -39,13 +39,12 @@ class TestSchemaRoundTrip:
         )
 
         # Step 3: Load function back
-        loaded_func = load_function("test.roundtrip.clean_data")
+        loaded_func = load_function("test.roundtrip.clean_data", version=1)
 
         # Step 4: Analyze loaded function to get actual schema
         loaded_constraint = analyze_function(loaded_func)
 
         # Step 5: Verify schema consistency
-        assert original_constraint.confidence == loaded_constraint.confidence
         assert len(original_constraint.required_columns) == len(
             loaded_constraint.required_columns,
         )
@@ -107,13 +106,12 @@ class TestSchemaRoundTrip:
         )
 
         # Step 3: Load function back
-        loaded_func = load_function("test.roundtrip.process_orders")
+        loaded_func = load_function("test.roundtrip.process_orders", version=1)
 
         # Step 4: Analyze loaded function
         loaded_constraint = analyze_function(loaded_func)
 
         # Step 5: Verify schema preservation
-        assert original_constraint.confidence == loaded_constraint.confidence
         assert (
             original_constraint.preserves_other_columns
             == loaded_constraint.preserves_other_columns
@@ -173,13 +171,10 @@ class TestSchemaRoundTrip:
         )
 
         # Step 3: Load function back
-        loaded_func = load_function("test.roundtrip.filter_by_category")
+        loaded_func = load_function("test.roundtrip.filter_by_category", version=1)
 
         # Step 4: Analyze loaded function
         loaded_constraint = analyze_function(loaded_func)
-
-        # Step 5: Verify schema consistency
-        assert original_constraint.confidence == loaded_constraint.confidence
 
         # Verify column requirements
         original_columns = {col.name for col in original_constraint.required_columns}
@@ -211,13 +206,12 @@ class TestSchemaRoundTrip:
         )
 
         # Step 3: Load function and check stored constraint
-        load_function("test.roundtrip.aggregate_sales")
+        load_function("test.roundtrip.aggregate_sales", version=1)
 
         # Step 4: Deserialize and compare
         deserialized_constraint = PartialSchemaConstraint.from_json(constraint_json)
 
         # Verify serialization preserved all data
-        assert original_constraint.confidence == deserialized_constraint.confidence
         assert (
             original_constraint.analysis_method
             == deserialized_constraint.analysis_method
@@ -265,6 +259,7 @@ class TestSchemaRoundTrip:
         # Step 2: Load function with validation enabled
         loaded_func = load_function(
             "test.roundtrip.validate_transactions",
+            version=1,
             validate_input=True,
         )
 
@@ -292,6 +287,7 @@ class TestSchemaRoundTrip:
         loaded_func_no_validation = load_function(
             "test.roundtrip.validate_transactions",
             validate_input=False,
+            version=1,
         )
 
         # Should work even with invalid data when validation is disabled
@@ -337,7 +333,7 @@ class TestSchemaRoundTrip:
         )
 
         # Step 2: Load function back
-        loaded_func = load_function("test.roundtrip.enrich_customer_data")
+        loaded_func = load_function("test.roundtrip.enrich_customer_data", version=1)
 
         # Step 3: Verify metadata preservation
 

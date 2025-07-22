@@ -320,9 +320,6 @@ class ConstraintGenerator:
         if has_joins:
             warnings.append("Join operations detected - schema changes may be complex")
 
-        # Type inference warnings
-        # Note: Previously warned about low confidence types, but confidence system removed
-
         # Aggregation warnings
         has_agg = any(op.get("method") in ["groupBy", "agg"] for op in operations)
         if has_agg:

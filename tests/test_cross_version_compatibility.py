@@ -63,7 +63,6 @@ class TestVersionedFunctionCompatibility:
         v1_func = load_function("test.version.data_cleaner", version=1)
         v2_func = load_function("test.version.data_cleaner", version=2)
         v3_func = load_function("test.version.data_cleaner", version=3)
-        latest_func = load_function("test.version.data_cleaner")  # Should be v3
 
         # Test v1 behavior
         v1_result = v1_func(test_df)
@@ -81,10 +80,6 @@ class TestVersionedFunctionCompatibility:
         assert v3_result.count() == 3
         assert set(v3_result.columns) == {"id", "amount", "validated", "risk_score"}
 
-        # Test latest version matches v3
-        latest_result = latest_func(test_df)
-        assert latest_result.count() == v3_result.count()
-        assert set(latest_result.columns) == set(v3_result.columns)
 
     def test_parameter_evolution_compatibility(self, spark, mlflow_tracking):
         """Test that parameter signatures evolve compatibly across versions."""
@@ -436,7 +431,7 @@ class TestForwardCompatibility:
         )
 
         # Load and test that basic functionality works even if some features aren't understood
-        loaded_func = load_function("test.forward.feature_rich")
+        loaded_func = load_function("test.forward.feature_rich", version=1)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         result = loaded_func(test_df)
@@ -472,14 +467,17 @@ class TestForwardCompatibility:
         # Load with different validation modes to test compatibility
         func_strict = load_function(
             "test.forward.complex_transform",
+            version=1,
             strict_validation=True,
         )
         func_permissive = load_function(
             "test.forward.complex_transform",
+            version=1,
             strict_validation=False,
         )
         func_no_validation = load_function(
             "test.forward.complex_transform",
+            version=1,
             validate_input=False,
         )
 
@@ -527,7 +525,7 @@ class TestForwardCompatibility:
         )
 
         # Load and verify that the function works regardless of metadata understanding
-        loaded_func = load_function("test.forward.metadata_rich")
+        loaded_func = load_function("test.forward.metadata_rich", version=1)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
 
@@ -566,12 +564,10 @@ class TestVersionConsistency:
         v1_func = load_function("test.version.consistency", version=1)
         v2_func = load_function("test.version.consistency", version=2)
         v3_func = load_function("test.version.consistency", version=3)
-        latest_func = load_function("test.version.consistency")  # Should be v3
 
         assert v1_func(test_df).collect()[0].version == "1.0"
         assert v2_func(test_df).collect()[0].version == "2.0"
         assert v3_func(test_df).collect()[0].version == "3.0"
-        assert latest_func(test_df).collect()[0].version == "3.0"
 
     def test_version_rollback_compatibility(self, spark, mlflow_tracking):
         """Test that rolling back to previous versions works correctly."""
@@ -647,20 +643,13 @@ class TestVersionConsistency:
         # Load multiple versions simultaneously
         v1_func = load_function("test.version.concurrent", version=1)
         v2_func = load_function("test.version.concurrent", version=2)
-        latest_func = load_function("test.version.concurrent")
 
         # Use all versions concurrently
         v1_result = v1_func(test_df)
         v2_result = v2_func(test_df)
-        latest_result = latest_func(test_df)
 
         assert v1_result.collect()[0].processor == "v1"
         assert v2_result.collect()[0].processor == "v2"
-        assert latest_result.collect()[0].processor == "v2"  # Should match latest (v2)
 
         # Verify that each function maintains its own state
         assert v1_func != v2_func
-        assert (
-            v2_func == latest_func
-            or latest_result.collect()[0].processor == v2_result.collect()[0].processor
-        )

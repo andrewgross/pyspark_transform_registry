@@ -75,7 +75,7 @@ class AnalysisWrapper(cst.CSTVisitor):
     LibCST visitor that coordinates multiple analysis components.
 
     This wrapper visits the CST and delegates to specific analyzers
-    while tracking overall analysis quality and confidence.
+    while tracking overall analysis quality.
     """
 
     def __init__(

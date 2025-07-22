@@ -31,9 +31,7 @@ class TestStaticAnalysisIntegration:
         """Test analyzing the add_timestamp function."""
         constraint = analyze_function(add_timestamp)
 
-        # Should succeed with some confidence level
         assert isinstance(constraint, PartialSchemaConstraint)
-        assert constraint.confidence in ["high", "medium", "low"]
         assert constraint.analysis_method == "static_analysis"
 
         # Should detect that this function adds a column
@@ -45,7 +43,6 @@ class TestStaticAnalysisIntegration:
         constraint = analyze_function(normalize_amounts)
 
         assert isinstance(constraint, PartialSchemaConstraint)
-        assert constraint.confidence in ["high", "medium", "low"]
         assert constraint.analysis_method == "static_analysis"
 
         # Should preserve other columns
@@ -56,7 +53,6 @@ class TestStaticAnalysisIntegration:
         constraint = analyze_function(filter_active)
 
         assert isinstance(constraint, PartialSchemaConstraint)
-        assert constraint.confidence in ["high", "medium", "low"]
         assert constraint.analysis_method == "static_analysis"
 
         # Filter operations should preserve schema structure
@@ -67,10 +63,9 @@ class TestStaticAnalysisIntegration:
         constraint = analyze_function(customer_analytics)
 
         assert isinstance(constraint, PartialSchemaConstraint)
-        assert constraint.confidence in ["high", "medium", "low"]
         assert constraint.analysis_method == "static_analysis"
 
-        # Complex functions may have lower confidence or warnings
+        # Complex functions may have warnings
         # This is acceptable as long as analysis doesn't crash
 
     def test_analyze_clean_text_data_function(self):
@@ -78,7 +73,6 @@ class TestStaticAnalysisIntegration:
         constraint = analyze_function(clean_text_data)
 
         assert isinstance(constraint, PartialSchemaConstraint)
-        assert constraint.confidence in ["high", "medium", "low"]
         assert constraint.analysis_method == "static_analysis"
 
     def test_analyze_calculate_metrics_function(self):
@@ -86,7 +80,6 @@ class TestStaticAnalysisIntegration:
         constraint = analyze_function(calculate_metrics)
 
         assert isinstance(constraint, PartialSchemaConstraint)
-        assert constraint.confidence in ["high", "medium", "low"]
         assert constraint.analysis_method == "static_analysis"
 
     def test_analysis_produces_serializable_constraints(self):
@@ -102,7 +95,6 @@ class TestStaticAnalysisIntegration:
         reconstructed = PartialSchemaConstraint.from_json(json_str)
         assert isinstance(reconstructed, PartialSchemaConstraint)
         assert reconstructed.analysis_method == constraint.analysis_method
-        assert reconstructed.confidence == constraint.confidence
 
     def test_analysis_handles_complex_functions_gracefully(self):
         """Test that analysis handles complex functions without crashing."""
@@ -122,7 +114,6 @@ class TestStaticAnalysisIntegration:
 
             # Should return a valid constraint
             assert isinstance(constraint, PartialSchemaConstraint)
-            assert constraint.confidence in ["high", "medium", "low"]
             assert constraint.analysis_method == "static_analysis"
 
             # Should have reasonable values
@@ -139,7 +130,6 @@ class TestStaticAnalysisIntegration:
 
         assert isinstance(merged, PartialSchemaConstraint)
         assert merged.analysis_method == "merged"
-        assert merged.confidence in ["high", "medium", "low"]
 
     @pytest.mark.parametrize(
         "func,expected",
@@ -159,7 +149,6 @@ class TestStaticAnalysisIntegration:
         # The actual analysis may not match exactly due to static analysis limitations,
         # but should produce reasonable results without crashing
         assert isinstance(constraint, PartialSchemaConstraint)
-        assert constraint.confidence in ["high", "medium", "low"]
 
         # Should preserve the general structure expectation
         assert isinstance(constraint.preserves_other_columns, bool)

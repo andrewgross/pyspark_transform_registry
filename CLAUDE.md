@@ -92,7 +92,7 @@ make build
 ### MLflow Integration Pattern
 - Functions are registered as pyfunc models in MLflow's model registry with automatic dependency inference
 - Schema constraints are stored as run tags for retrieval during loading
-- Metadata includes parameter info, return types, docstrings, and confidence levels
+- Metadata includes parameter info, return types, docstrings
 - Search functionality uses MLflow's model registry and run tag filtering
 - Round-trip execution testing ensures function fidelity and schema consistency
 
@@ -107,7 +107,6 @@ make build
 - `ColumnAnalyzer` detects DataFrame column operations (select, filter, withColumn)
 - `OperationAnalyzer` identifies transformation patterns and data flow
 - `SchemaInference` combines analysis results into comprehensive schema constraints
-- Confidence levels indicate reliability of inferred constraints (high/medium/low)
 
 ### Type System Integration
 - Uses `typing.get_type_hints()` for runtime type information

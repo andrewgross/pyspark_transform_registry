@@ -33,7 +33,7 @@ class TestFunctionalBehaviorFidelity:
         register_function(func=simple_transform, name="test.metadata.simple_transform")
 
         # Load function back
-        loaded_func = load_function("test.metadata.simple_transform")
+        loaded_func = load_function("test.metadata.simple_transform", version=1)
 
         # Test functional equivalence
         original_result = simple_transform(test_df)
@@ -77,7 +77,7 @@ class TestFunctionalBehaviorFidelity:
             example_params={"threshold": 50.0, "category": "premium"},
         )
 
-        loaded_func = load_function("test.metadata.parameterized_transform")
+        loaded_func = load_function("test.metadata.parameterized_transform", version=1)
 
         # Test various parameter combinations
         test_cases = [
@@ -139,7 +139,7 @@ class TestFunctionalBehaviorFidelity:
             name="test.metadata.complex_transform",
         )
 
-        loaded_func = load_function("test.metadata.complex_transform")
+        loaded_func = load_function("test.metadata.complex_transform", version=1)
 
         # Test with defaults
         original_result = complex_transform(test_df)
@@ -179,7 +179,7 @@ class TestMLflowMetadataPreservation:
         )
 
         # Verify function can be loaded and works
-        loaded_func = load_function("test.metadata.named_function")
+        loaded_func = load_function("test.metadata.named_function", version=1)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         result = loaded_func(test_df)
@@ -210,7 +210,7 @@ class TestMLflowMetadataPreservation:
         )
 
         # Verify function works correctly
-        loaded_func = load_function("test.metadata.documented_function")
+        loaded_func = load_function("test.metadata.documented_function", version=1)
 
         test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
         result = loaded_func(test_df)
@@ -244,7 +244,7 @@ class TestMLflowMetadataPreservation:
         )
 
         # Test that the function works with the example parameters
-        loaded_func = load_function("test.metadata.example_function")
+        loaded_func = load_function("test.metadata.example_function", version=1)
 
         # Test with example parameters
         result = loaded_func(sample_df, params=example_params)
@@ -271,6 +271,7 @@ class TestErrorHandlingFidelity:
 
         loaded_func = load_function(
             "test.metadata.strict_function",
+            version=1,
             validate_input=False,
         )
 
@@ -304,6 +305,7 @@ class TestErrorHandlingFidelity:
 
         loaded_func = load_function(
             "test.metadata.column_dependent_function",
+            version=1,
             validate_input=False,
         )
 

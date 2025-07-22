@@ -293,32 +293,6 @@ class TestRuntimeValidator:
         assert result.is_valid is True
         assert len(result.get_error_messages()) == 0
 
-    def test_validate_confidence_warnings(self, spark):
-        """Test that confidence levels generate appropriate warnings."""
-        # Create simple DataFrame
-        schema = StructType(
-            [
-                StructField("customer_id", StringType(), True),
-            ],
-        )
-        df = spark.createDataFrame([("cust1",)], schema)
-
-        # Create low confidence constraint
-        constraint = PartialSchemaConstraint(
-            required_columns=[
-                ColumnRequirement("customer_id", "string"),
-            ],
-            confidence="low",
-        )
-
-        # Validate
-        validator = RuntimeValidator()
-        result = validator.validate_dataframe(df, constraint)
-
-        assert result.is_valid is True
-        warnings = result.get_warning_messages()
-        assert any("low confidence" in w for w in warnings)
-
     def test_validate_analysis_warnings(self, spark):
         """Test that analysis warnings are included in validation."""
         # Create simple DataFrame
@@ -436,7 +410,6 @@ class TestComplexValidationScenarios:
                 ColumnTransformation("processed_at", "add", "timestamp"),
             ],
             preserves_other_columns=True,
-            confidence="medium",
         )
 
         # Validate
@@ -445,9 +418,6 @@ class TestComplexValidationScenarios:
 
         assert result.is_valid is True
 
-        # Should have medium confidence warning
-        warnings = result.get_warning_messages()
-        assert any("medium confidence" in w for w in warnings)
 
     def test_validate_nullability_warnings(self, spark):
         """Test nullability validation warnings."""
