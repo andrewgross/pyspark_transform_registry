@@ -39,15 +39,15 @@ Simple column operations that demonstrate basic usage patterns:
 - Basic parameter handling
 
 ```python
-# Log a simple transform
-register_function(add_sales_tax, "add_sales_tax")
+# Register a simple transform
+register_function(func=add_sales_tax, name="add_sales_tax")
 
 # Apply with different parameters
 result = add_sales_tax(df, tax_rate=0.10)
 
 # Reload and reuse
-transform = load_function("add_sales_tax")
-result = transform(df, tax_rate=0.08)
+transform = load_function("add_sales_tax", version=1)
+result = transform(df, params={"tax_rate": 0.08})
 ```
 
 ### 2. Intermediate Transforms
@@ -60,14 +60,16 @@ Multi-step transformations with business logic:
 - Multiple column operations in one transform
 
 ```python
-# Log intermediate transform
-register_function(customer_segmentation, "customer_segmentation")
+# Register intermediate transform
+register_function(func=customer_segmentation, name="customer_segmentation")
 
 # Apply segmentation
 segmented_df = customer_segmentation(df)
 
-# Find all available transforms
-transforms = list_registered_functions()
+# Use MLflow's model registry to discover models
+import mlflow
+client = mlflow.tracking.MlflowClient()
+transforms = client.list_registered_models()
 ```
 
 ### 3. Complex Transforms
@@ -81,8 +83,8 @@ Advanced transformations with dependencies:
 - Custom business logic
 
 ```python
-# Log complex transform
-register_function(advanced_feature_engineering, "advanced_features")
+# Register complex transform
+register_function(func=advanced_feature_engineering, name="advanced_features")
 
 # Apply feature engineering
 featured_df = advanced_feature_engineering(df)
@@ -112,22 +114,19 @@ example_4_full_ml_pipeline()
 
 ### 5. Version Management
 
-**Functions**: `example_5_version_management()`
 
-Shows how to:
-- Create multiple versions of transforms
-- Use semantic versioning
-- Apply version constraints
-- Compare different versions
 
 ```python
-# Log different versions
-register_function(calculate_discount_v1, "calculate_discount", version="1.0.0")
-register_function(calculate_discount_v2, "calculate_discount", version="2.0.0")
+# Register different versions of the same function
+model_uri_v1 = register_function(func=calculate_discount_v1, name="calculate_discount")
+# model:/calculate_discount/1
 
-# Load specific version ranges
-v1_transform = load_function("calculate_discount", version_constraint=">=1.0.0,<2.0.0")
-v2_transform = load_function("calculate_discount", version_constraint=">=2.0.0")
+model_uri_v2 = register_function(func=calculate_discount_v2, name="calculate_discount")
+# model:/calculate_discount/2
+
+# Load specific versions
+v1_func = load_function("calculate_discount", version=1)
+v2_func = load_function("calculate_discount", version=2)
 ```
 
 ## Key Patterns Demonstrated
@@ -135,48 +134,47 @@ v2_transform = load_function("calculate_discount", version_constraint=">=2.0.0")
 ### Transform Registration
 ```python
 # Basic registration
-register_function(my_transform, "my_transform")
+register_function(func=my_transform, name="my_transform")
 
-# With versioning
-register_function(my_transform, "my_transform", version="1.0.0")
+# With schema inference
+register_function(func=my_transform, name="my_transform", input_example=df)
 
-# With examples for schema inference
-register_function(my_transform, "my_transform",
-                      input_example=df, output_example=result_df)
+# With metadata
+register_function(
+    func=my_transform,
+    name="my_transform",
+    input_example=df,
+    description="My transform function"
+)
 ```
 
 ### Transform Loading
 ```python
-# Load by name (latest version)
-transform = load_function("my_transform")
+# Load by name
+transform = load_function("my_transform", version=1)
 
-# Load with version constraints
-transform = load_function("my_transform", version_constraint=">=1.0.0,<2.0.0")
-
-# Load specific version
-transform = load_transform_function("my_transform", version="1")
 ```
 
 ### Transform Discovery
 ```python
-# Find all transforms
-all_transforms = list_registered_functions()
+# Discover transforms using MLflow
+import mlflow
+client = mlflow.tracking.MlflowClient()
+all_transforms = client.list_registered_models()
 
-# Find by name
-name_transforms = list_registered_functions(name="my_transform")
+# Get specific model info
+model = client.get_registered_model("my_transform")
+versions = model.latest_versions
 
-# Find with version constraints
-constrained_transforms = list_registered_functions(
-    name="my_transform",
-    version_constraint=">=1.0.0"
-)
+# List all versions of a model
+versions = client.get_latest_versions("my_transform")
 ```
 
 ### Transform Chaining
 ```python
 # Chain transforms in sequence
-step1_transform = load_function("data_cleaning")
-step2_transform = load_function("feature_engineering")
+step1_transform = load_function("data_cleaning", version=1)
+step2_transform = load_function("feature_engineering", version=1)
 
 # Apply pipeline
 result = step2_transform(step1_transform(raw_df))

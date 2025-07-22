@@ -1,17 +1,15 @@
 """
-Example demonstrating advanced requirements handling and function clustering.
+Example demonstrating requirements handling in PySpark Transform Registry.
 
 This example shows how to:
-1. Use automatic dependency detection
-2. Handle manual requirements specification
-3. Create function clusters for bundling related functions
-4. Validate function safety before logging
+1. Use extra_pip_requirements for manual dependency specification
+2. Register functions with specific package versions
+3. Load and use functions with custom requirements
 """
 
 import mlflow
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.functions import col, when, lit, udf
-from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import col, when, lit
 
 from pyspark_transform_registry import (
     register_function,
@@ -25,122 +23,46 @@ def setup_spark_session():
 
 
 # =============================================================================
-# EXAMPLE 1: Automatic Dependency Detection
+# EXAMPLE 1: Basic Transform with Standard Dependencies
 # =============================================================================
 
 
-def pandas_heavy_transform(df: DataFrame) -> DataFrame:
+def basic_transform(df: DataFrame) -> DataFrame:
     """
-    Transform that uses pandas operations (will be auto-detected).
-
-    This function demonstrates automatic dependency detection for pandas.
+    Basic transform using only standard PySpark functionality.
     """
-    import pandas as pd
-
-    # Convert to pandas, do some operations, convert back
-    pandas_df = df.toPandas()
-
-    # Use pandas-specific operations
-    pandas_df["processed_at"] = pd.Timestamp.now()
-    pandas_df["category_upper"] = pandas_df["category"].str.upper()
-
-    # Convert back to Spark DataFrame
-    spark = SparkSession.getActiveSession()
-    return spark.createDataFrame(pandas_df)
-
-
-def numpy_calculation(df: DataFrame) -> DataFrame:
-    """
-    Transform that uses NumPy for calculations.
-    """
-    import numpy as np
-
-    @udf(returnType=IntegerType())
-    def numpy_calculation_udf(value):
-        """UDF using NumPy for complex calculations."""
-        return int(np.sqrt(value * 2) + np.random.randint(0, 10))
-
-    return df.withColumn("numpy_result", numpy_calculation_udf(col("amount")))
-
-
-# =============================================================================
-# EXAMPLE 2: Manual Requirements Specification
-# =============================================================================
-
-
-def sklearn_model_transform(df: DataFrame) -> DataFrame:
-    """
-    Transform that requires specific sklearn version.
-
-    This shows how to specify exact requirements manually.
-    """
-    # This would use sklearn for some ML operations
-    # For demo purposes, we'll just add a placeholder column
-    return df.withColumn("ml_score", lit(0.85))
-
-
-def complex_deps_transform(df: DataFrame) -> DataFrame:
-    """
-    Transform with complex dependencies that need careful version management.
-    """
-    # This would use multiple ML libraries
-    return df.withColumn("ensemble_score", lit(0.92))
-
-
-# =============================================================================
-# EXAMPLE 3: Function Clustering
-# =============================================================================
-
-
-def data_cleaner(df: DataFrame) -> DataFrame:
-    """Step 1: Clean the data."""
-    return df.filter(col("amount") > 0).dropna()
-
-
-def feature_engineer(df: DataFrame) -> DataFrame:
-    """Step 2: Engineer features - depends on data_cleaner."""
-    # This function might call data_cleaner internally
-    cleaned_df = data_cleaner(df)
-
-    return cleaned_df.withColumn(
-        "amount_category",
+    return df.withColumn(
+        "risk_category",
         when(col("amount") > 1000, "high")
         .when(col("amount") > 100, "medium")
         .otherwise("low"),
     )
 
 
-def scoring_function(df: DataFrame) -> DataFrame:
-    """Step 3: Calculate scores - depends on feature_engineer."""
-    featured_df = feature_engineer(df)
-
-    return featured_df.withColumn(
-        "risk_score",
-        when(col("amount_category") == "high", 0.8)
-        .when(col("amount_category") == "medium", 0.5)
-        .otherwise(0.2),
-    )
-
-
 # =============================================================================
-# EXAMPLE 4: Local Code Dependencies
+# EXAMPLE 2: Transform with Custom Requirements
 # =============================================================================
 
 
-def transform_with_local_utils(df: DataFrame) -> DataFrame:
+def advanced_transform(df: DataFrame) -> DataFrame:
     """
-    Transform that depends on local utility functions.
+    Transform that requires specific package versions.
 
-    This would typically import from local modules like:
-    from utils.data_processing import normalize_text
-    from utils.calculations import calculate_score
+    Note: This example shows how to specify requirements,
+    but the actual packages may not be used in this simple example.
     """
+    # In a real scenario, this might use pandas or numpy functionality
+    return df.withColumn("processed_flag", lit(True))
 
-    # For demo purposes, inline the logic
-    def normalize_text_inline(text_col):
-        return text_col.upper()
 
-    return df.withColumn("normalized_category", normalize_text_inline(col("category")))
+def ml_scoring_transform(df: DataFrame) -> DataFrame:
+    """
+    Transform that would use ML libraries.
+
+    Note: This example shows requirement specification for ML packages.
+    """
+    # In a real scenario, this might use scikit-learn or other ML libraries
+    return df.withColumn("ml_score", lit(0.95))
 
 
 # =============================================================================
@@ -148,8 +70,8 @@ def transform_with_local_utils(df: DataFrame) -> DataFrame:
 # =============================================================================
 
 
-def example_1_automatic_detection():
-    """Example 1: Automatic dependency detection."""
+def example_1_basic_transform():
+    """Example 1: Basic transform without custom requirements."""
     spark = setup_spark_session()
 
     # Create sample data
@@ -160,231 +82,180 @@ def example_1_automatic_detection():
     ]
     df = spark.createDataFrame(data, ["id", "category", "amount"])
 
-    print("=== Example 1: Automatic Dependency Detection ===")
+    print("=== Example 1: Basic Transform ===")
+    print("Input data:")
+    df.show()
 
     with mlflow.start_run():
-        # Log with automatic dependency detection
-        print("Logging pandas_heavy_transform with auto-detection...")
+        # Register with no custom requirements
+        print("Registering basic_transform...")
         register_function(
-            pandas_heavy_transform,
+            func=basic_transform,
+            name="basic_transform",
             input_example=df,
-            auto_detect_requirements=True,
-            validate_dependencies=True,
+            description="Basic risk categorization",
         )
 
-        print("Logging numpy_calculation with auto-detection...")
-        register_function(
-            numpy_calculation,
-            input_example=df,
-            auto_detect_requirements=True,
-            validate_dependencies=True,
-        )
+        print("✅ Function registered successfully")
 
-        print("✅ Functions logged with automatic dependency detection")
+        # Load and test
+        transform = load_function("basic_transform", version=1)
+        result = transform(df)
+
+        print("Result:")
+        result.show()
 
 
-def example_2_manual_requirements():
-    """Example 2: Manual requirements specification."""
+def example_2_custom_requirements():
+    """Example 2: Transform with custom requirements."""
     spark = setup_spark_session()
 
     data = [(1, "test", 100.0)]
     df = spark.createDataFrame(data, ["id", "category", "amount"])
 
-    print("\n=== Example 2: Manual Requirements Specification ===")
+    print("\n=== Example 2: Custom Requirements ===")
 
     with mlflow.start_run():
-        # Log with specific requirements
-        print("Logging sklearn_model_transform with manual requirements...")
+        # Register with specific requirements
+        print("Registering advanced_transform with custom requirements...")
         register_function(
-            sklearn_model_transform,
+            func=advanced_transform,
+            name="advanced_transform",
             input_example=df,
-            extra_pip_requirements=["scikit-learn==1.3.0", "joblib>=1.2.0"],
-            auto_detect_requirements=False,
-            validate_dependencies=True,
+            extra_pip_requirements=["pandas>=2.0.0", "numpy>=1.24.0"],
+            description="Advanced transform with custom dependencies",
         )
 
-        print("Logging complex_deps_transform with multiple requirements...")
-        register_function(
-            complex_deps_transform,
-            input_example=df,
-            extra_pip_requirements=[
-                "scikit-learn==1.3.0",
-                "xgboost==1.7.0",
-                "lightgbm==3.3.0",
-            ],
-            auto_detect_requirements=False,
-            validate_dependencies=True,
-        )
+        print("✅ Function registered with custom requirements")
 
-        print("✅ Functions logged with manual requirements")
+        # Load and test
+        transform = load_function("advanced_transform", version=1)
+        result = transform(df)
+
+        print("Result:")
+        result.show()
 
 
-def example_3_function_clustering():
-    """Example 3: Function clustering for interdependent functions."""
+def example_3_ml_requirements():
+    """Example 3: Transform with ML library requirements."""
     spark = setup_spark_session()
 
     data = [
-        (1, "electronics", 150.0),
-        (2, "books", 25.0),
-        (3, "clothing", 1200.0),
+        (1, "customer_a", 500.0),
+        (2, "customer_b", 1200.0),
+        (3, "customer_c", 75.0),
     ]
-    df = spark.createDataFrame(data, ["id", "category", "amount"])
+    df = spark.createDataFrame(data, ["id", "customer", "amount"])
 
-    print("\n=== Example 3: Function Clustering ===")
+    print("\n=== Example 3: ML Library Requirements ===")
 
     with mlflow.start_run():
-        # Register individual functions (cluster functionality not yet implemented)
-        print("Registering individual functions...")
-        register_function(data_cleaner, name="pipeline.data_cleaner", input_example=df)
+        # Register with ML requirements
+        print("Registering ml_scoring_transform with ML requirements...")
         register_function(
-            feature_engineer,
-            name="pipeline.feature_engineer",
+            func=ml_scoring_transform,
+            name="ml_scoring_transform",
             input_example=df,
+            extra_pip_requirements=[
+                "scikit-learn>=1.3.0",
+                "xgboost>=1.7.0",
+                "lightgbm>=3.3.0",
+            ],
+            description="ML scoring transform with multiple ML dependencies",
         )
-        register_function(
-            scoring_function,
-            name="pipeline.scoring_function",
-            input_example=df,
-        )
 
-        print("✅ Function cluster logged successfully")
+        print("✅ Function registered with ML requirements")
 
-        # Test loading and using the cluster
-        print("\nTesting cluster usage...")
-        cluster_transform = load_function("data_processing_pipeline")
+        # Load and test
+        transform = load_function("ml_scoring_transform", version=1)
+        result = transform(df)
 
-        # Use different functions from the cluster
-        cleaned = cluster_transform(df, "data_cleaner")
-        featured = cluster_transform(df, "feature_engineer")
-        scored = cluster_transform(df, "scoring_function")
-
-        print("Cluster functions executed successfully:")
-        print(f"  - Cleaned rows: {cleaned.count()}")
-        print(f"  - Featured columns: {len(featured.columns)}")
-        print(f"  - Scored columns: {len(scored.columns)}")
+        print("Result:")
+        result.show()
 
 
-def example_4_local_code_dependencies():
-    """Example 4: Handling local code dependencies."""
+def example_4_version_specific_requirements():
+    """Example 4: Transform with version-specific requirements."""
     spark = setup_spark_session()
 
-    data = [(1, "test category", 100.0)]
-    df = spark.createDataFrame(data, ["id", "category", "amount"])
+    def version_specific_transform(df: DataFrame) -> DataFrame:
+        """Transform requiring specific package versions."""
+        return df.withColumn("version_info", lit("v1.0"))
 
-    print("\n=== Example 4: Local Code Dependencies ===")
+    data = [(1, "test", 50.0)]
+    df = spark.createDataFrame(data, ["id", "name", "value"])
 
-    with mlflow.start_run():
-        # Log with local code paths (would bundle utils/ directory)
-        print("Logging transform with local code dependencies...")
-        register_function(
-            transform_with_local_utils,
-            input_example=df,
-            code_paths=["utils/"],  # This would bundle local utils
-            auto_detect_requirements=True,
-            validate_dependencies=True,
-        )
-
-        print("✅ Function logged with local code dependencies")
-
-
-def example_5_validation_and_warnings():
-    """Example 5: Dependency validation and warnings."""
-    spark = setup_spark_session()
-
-    print("\n=== Example 5: Dependency Validation and Warnings ===")
-
-    # Function with external calls (will trigger warnings)
-    def problematic_function(df: DataFrame) -> DataFrame:
-        """Function that calls external functions not available in cluster."""
-        # This would call some external function
-        # external_service.process_data(df)  # This would trigger warning
-        return df.withColumn("processed", lit(True))
-
-    # Function with complex dependencies (will trigger warnings)
-    def heavy_deps_function(df: DataFrame) -> DataFrame:
-        """Function with heavy ML dependencies."""
-        # import tensorflow as tf  # This would trigger warning
-        return df.withColumn("ml_result", lit(0.95))
-
-    data = [(1, "test", 100.0)]
-    df = spark.createDataFrame(data, ["id", "category", "amount"])
+    print("\n=== Example 4: Version-Specific Requirements ===")
 
     with mlflow.start_run():
-        print("Logging function with validation warnings...")
-
-        # This will show warnings about external calls
+        # Register with very specific version requirements
+        print("Registering transform with version-specific requirements...")
         register_function(
-            problematic_function,
+            func=version_specific_transform,
+            name="version_specific_transform",
             input_example=df,
-            validate_dependencies=True,
-            auto_detect_requirements=True,
+            extra_pip_requirements=[
+                "requests==2.31.0",  # Exact version
+                "urllib3>=1.26.0,<3.0.0",  # Version range
+                "certifi~=2023.0",  # Compatible version
+            ],
+            description="Transform with specific version constraints",
         )
 
-        print("✅ Function logged with validation warnings shown")
+        print("✅ Function registered with version-specific requirements")
+
+        # Load and test
+        transform = load_function("version_specific_transform", version=1)
+        result = transform(df)
+
+        print("Result:")
+        result.show()
 
 
-def example_6_requirements_comparison():
-    """Example 6: Compare auto-detected vs manual requirements."""
-    spark = setup_spark_session()
+def example_5_discovery_with_requirements():
+    """Example 5: Discovering registered functions and their requirements."""
+    print("\n=== Example 5: Model Discovery ===")
 
-    def sample_function(df: DataFrame) -> DataFrame:
-        """Function for requirements comparison."""
-        return df.withColumn("test_col", lit("test"))
+    # Use MLflow to discover registered models
+    client = mlflow.tracking.MlflowClient()
+    models = client.list_registered_models()
 
-    data = [(1, "test", 100.0)]
-    df = spark.createDataFrame(data, ["id", "category", "amount"])
+    print("📋 Registered models:")
+    for model in models:
+        print(f"\n🔍 Model: {model.name}")
 
-    print("\n=== Example 6: Requirements Comparison ===")
+        # Get latest version details
+        latest_versions = client.get_latest_versions(model.name)
+        for version in latest_versions:
+            print(f"  📦 Version: {version.version}")
 
-    with mlflow.start_run():
-        # Log with auto-detection
-        print("1. Auto-detected requirements:")
-        register_function(
-            sample_function,
-            name="auto_detected_version",
-            input_example=df,
-            auto_detect_requirements=True,
-            validate_dependencies=True,
-        )
+            # Get run details to see requirements
+            try:
+                run = client.get_run(version.run_id)
+                if "description" in run.data.tags:
+                    print(f"  📝 Description: {run.data.tags['description']}")
 
-        print("\n2. Manual requirements:")
-        register_function(
-            sample_function,
-            name="manual_version",
-            input_example=df,
-            extra_pip_requirements=["pandas==2.0.0", "numpy==1.24.0"],
-            auto_detect_requirements=False,
-            validate_dependencies=True,
-        )
+                # Note: Requirements are handled internally by MLflow
+                # They're not directly visible as tags, but are used during model loading
+                print("  ✅ Requirements handled by MLflow internally")
 
-        print("\n3. Hybrid approach (auto + manual):")
-        register_function(
-            sample_function,
-            name="hybrid_version",
-            input_example=df,
-            extra_pip_requirements=["special-package==1.0.0"],
-            auto_detect_requirements=True,
-            validate_dependencies=True,
-        )
-
-        print("✅ All versions logged with different requirement strategies")
+            except Exception as e:
+                print(f"  ⚠️  Could not get run details: {e}")
 
 
 if __name__ == "__main__":
     print("🚀 Starting Requirements Handling Examples")
 
     # Run all examples
-    example_1_automatic_detection()
-    example_2_manual_requirements()
-    example_3_function_clustering()
-    example_4_local_code_dependencies()
-    example_5_validation_and_warnings()
-    example_6_requirements_comparison()
+    example_1_basic_transform()
+    example_2_custom_requirements()
+    example_3_ml_requirements()
+    example_4_version_specific_requirements()
+    example_5_discovery_with_requirements()
 
     print("\n🎉 All requirements handling examples completed!")
     print("\nKey Benefits:")
-    print("✅ Minimal dependency detection prevents bloated requirements")
-    print("✅ Function clustering bundles related functions together")
-    print("✅ Validation catches potential issues before deployment")
-    print("✅ MLflow native requirements handling for maximum compatibility")
-    print("✅ Flexible manual override when needed")
+    print("✅ Specify exact package versions for reproducibility")
+    print("✅ MLflow handles dependency management automatically")
+    print("✅ Clear separation of transform logic from dependencies")
+    print("✅ Version constraints ensure compatibility")

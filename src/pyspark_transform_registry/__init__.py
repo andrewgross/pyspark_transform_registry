@@ -8,7 +8,6 @@ functions with automatic dependency detection and signature inference.
 
 import warnings
 from typing import Any
-from collections.abc import Callable
 
 # Import the new simplified API
 from .core import (
@@ -39,20 +38,6 @@ def log_transform_function(*args, **kwargs) -> Any:
     return register_function(*args, **kwargs)
 
 
-def load_transform_function(*args, **kwargs) -> Callable:
-    """
-    DEPRECATED: Use load_function() instead.
-
-    This function will be removed in a future version.
-    """
-    warnings.warn(
-        "load_transform_function is deprecated. Use load_function() instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return load_function(*args, **kwargs)
-
-
 def find_transform_versions(*args, **kwargs) -> Any:
     """
     DEPRECATED: This function has been removed.
@@ -69,7 +54,7 @@ def find_transform_versions(*args, **kwargs) -> Any:
     )
 
 
-__version__ = "1.0.0"
+__version__ = "0.1.0"
 
 __all__ = [
     # New API

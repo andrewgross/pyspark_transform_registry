@@ -15,7 +15,7 @@ pip install pyspark-transform-registry
 ```python
 from pyspark_transform_registry import register_function
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, lit
 
 def clean_data(df: DataFrame) -> DataFrame:
     """Remove invalid records and standardize data."""
@@ -35,7 +35,7 @@ model_uri = register_function(
 from pyspark_transform_registry import load_function
 
 # Load the registered function
-clean_data_func = load_function("analytics.etl.clean_data")
+clean_data_func = load_function("analytics.etl.clean_data", version=1)
 
 # Use it on your data
 result = clean_data_func(your_dataframe)
@@ -108,18 +108,16 @@ register_function(
 ### Loading and Versioning
 
 ```python
-from pyspark_transform_registry import load_function, list_registered_functions
+from pyspark_transform_registry import load_function
 
 # Load latest version
-transform = load_function("finance.scoring.risk_scorer")
+transform = load_function("finance.scoring.risk_scorer", version=1)
 
 # Load specific version
 transform_v2 = load_function("finance.scoring.risk_scorer", version=2)
 
-# List all registered functions
-functions = list_registered_functions()
-for func in functions:
-    print(f"{func['name']} - Version {func['latest_version']}")
+# Use MLflow's native model registry APIs to discover models
+# See MLflow documentation for model discovery patterns
 ```
 
 ### Runtime Validation
@@ -147,7 +145,7 @@ register_function(
 )
 
 # Load with validation enabled (default)
-transform = load_function("retail.processing.process_orders")
+transform = load_function("retail.processing.process_orders", version=1)
 
 # This will validate the DataFrame structure before processing
 result = transform(orders_df)  # Validates: order_id, customer_id, amount columns exist
@@ -155,12 +153,14 @@ result = transform(orders_df)  # Validates: order_id, customer_id, amount column
 # Load with validation disabled
 transform_no_validation = load_function(
     "retail.processing.process_orders",
+    version=1,
     validate_input=False
 )
 
 # Load with strict validation (warnings become errors)
 transform_strict = load_function(
     "retail.processing.process_orders",
+    version=1,
     strict_validation=True
 )
 ```
@@ -189,7 +189,7 @@ register_function(
 )
 
 # Load and use with parameters
-filter_func = load_function("retail.filtering.filter_by_category")
+filter_func = load_function("retail.filtering.filter_by_category", version=1)
 
 # Use with validation - validates DataFrame structure before filtering
 electronics = filter_func(orders_df, params={"category": "electronics", "min_amount": 100.0})
@@ -223,7 +223,7 @@ Load a previously registered PySpark transform function with optional validation
 
 **Parameters:**
 - `name` (str): Model name in registry
-- `version` (int or str, optional): Model version to load (defaults to latest)
+- `version` (int or str): Model version to load (required)
 - `validate_input` (bool, optional): Whether to validate input DataFrames against stored schema constraints (default: True)
 - `strict_validation` (bool, optional): If True, treat validation warnings as errors (default: False)
 
@@ -232,15 +232,19 @@ Load a previously registered PySpark transform function with optional validation
   - Single param: `transform(df)`
   - Multi param: `transform(df, params={'param1': value1, 'param2': value2})`
 
-### `list_registered_functions()`
+### Model Discovery
 
-List registered transform functions.
+To discover registered models, use MLflow's native model registry APIs:
 
-**Parameters:**
-- `name_prefix` (str, optional): Optional prefix to filter model names
-
-**Returns:**
-- `list`: List of registered models with their metadata
+```python
+import mlflow
+client = mlflow.tracking.MlflowClient()
+models = client.list_registered_models()
+for model in models:
+    print(f"Model: {model.name}")
+    for version in model.latest_versions:
+        print(f"  Version: {version.version}")
+```
 
 ## Requirements
 

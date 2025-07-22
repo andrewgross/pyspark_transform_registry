@@ -142,6 +142,7 @@ def main():
         # Load function with validation enabled (default behavior)
         loaded_function = load_function(
             "customer.processing.risk_assessment",
+            version=1,
             validate_input=True,
             strict_validation=False,  # Warnings don't fail execution
         )
@@ -198,6 +199,7 @@ def main():
         # Load function with validation disabled
         no_validation_function = load_function(
             "customer.processing.risk_assessment",
+            version=1,
             validate_input=False,
         )
 

@@ -24,7 +24,6 @@ from pyspark.sql.functions import (
 from pyspark_transform_registry import (
     register_function,
     load_function,
-    list_registered_functions,
 )
 
 
@@ -258,7 +257,7 @@ def example_1_simple_workflow():
     # Start MLflow run
     with mlflow.start_run():
         # Log the transform
-        register_function(add_sales_tax, "add_sales_tax")
+        register_function(func=add_sales_tax, name="add_sales_tax")
         print("✓ Logged 'add_sales_tax' transform")
 
         # Apply the transform
@@ -267,8 +266,8 @@ def example_1_simple_workflow():
         result.show()
 
         # Load and reuse the transform
-        loaded_transform = load_function("add_sales_tax")
-        reloaded_result = loaded_transform(df, tax_rate=0.08)
+        loaded_transform = load_function("add_sales_tax", version=1)
+        reloaded_result = loaded_transform(df, params={"tax_rate": 0.08})
         print("Result after reloading transform with different tax rate:")
         reloaded_result.show()
 
@@ -295,7 +294,7 @@ def example_2_intermediate_workflow():
 
     with mlflow.start_run():
         # Log the segmentation transform
-        register_function(customer_segmentation, "customer_segmentation")
+        register_function(func=customer_segmentation, name="customer_segmentation")
         print("✓ Logged 'customer_segmentation' transform")
 
         # Apply segmentation
@@ -303,11 +302,12 @@ def example_2_intermediate_workflow():
         print("Customer segmentation results:")
         segmented_df.show()
 
-        # Find all available transforms
-        transforms = list_registered_functions()
+        # Find all available transforms using MLflow
+        client = mlflow.tracking.MlflowClient()
+        transforms = client.list_registered_models()
         print(f"✓ Found {len(transforms)} available transforms")
         for transform in transforms:
-            print(f"  - {transform['metadata']['transform_name']}")
+            print(f"  - {transform.name}")
 
 
 def example_3_complex_workflow():
@@ -333,7 +333,7 @@ def example_3_complex_workflow():
 
     with mlflow.start_run():
         # Log the complex transform
-        register_function(advanced_feature_engineering, "advanced_features")
+        register_function(func=advanced_feature_engineering, name="advanced_features")
         print("✓ Logged 'advanced_features' transform")
 
         # Apply feature engineering
@@ -364,8 +364,8 @@ def example_4_full_ml_pipeline():
 
     with mlflow.start_run():
         # Log all transforms
-        register_function(clean_and_validate_data, "data_cleaning")
-        register_function(ml_preprocessing_pipeline, "ml_preprocessing")
+        register_function(func=clean_and_validate_data, name="data_cleaning")
+        register_function(func=ml_preprocessing_pipeline, name="ml_preprocessing")
         print("✓ Logged data cleaning and ML preprocessing transforms")
 
         # Step 1: Clean and validate data
@@ -380,8 +380,8 @@ def example_4_full_ml_pipeline():
 
         # Step 3: Show how to reload and chain transforms
         print("\n--- Reloading and chaining transforms ---")
-        cleaning_transform = load_function("data_cleaning")
-        ml_transform = load_function("ml_preprocessing")
+        cleaning_transform = load_function("data_cleaning", version=1)
+        ml_transform = load_function("ml_preprocessing", version=1)
 
         # Chain the transforms
         pipeline_result = ml_transform(cleaning_transform(df))
@@ -414,43 +414,31 @@ def example_5_version_management():
     df = spark.createDataFrame(data, ["id", "name", "price"])
 
     with mlflow.start_run():
-        # Log version 1
-        register_function(
-            calculate_discount_v1,
-            "calculate_discount",
-            version="1.0.0",
-        )
-        print("✓ Logged calculate_discount version 1.0.0")
+        # Register version 1
+        register_function(func=calculate_discount_v1, name="calculate_discount")
+        print("✓ Registered calculate_discount version 1")
 
-        # Log version 2
-        register_function(
-            calculate_discount_v2,
-            "calculate_discount",
-            version="2.0.0",
-        )
-        print("✓ Logged calculate_discount version 2.0.0")
+        # Register version 2
+        register_function(func=calculate_discount_v2, name="calculate_discount")
+        print("✓ Registered calculate_discount version 2")
 
-        # Find all versions
-        versions = list_registered_functions(name="calculate_discount")
+        # Find all versions using MLflow
+        client = mlflow.tracking.MlflowClient()
+        model = client.get_registered_model("calculate_discount")
+        versions = model.latest_versions
         print(f"Found {len(versions)} versions of calculate_discount:")
         for v in versions:
-            print(f"  - Version {v['semantic_version']}")
+            print(f"  - Version {v.version}")
 
         # Load and compare different versions
-        v1_transform = load_function(
-            "calculate_discount",
-            version_constraint=">=1.0.0,<2.0.0",
-        )
-        v2_transform = load_function(
-            "calculate_discount",
-            version_constraint=">=2.0.0",
-        )
+        v1_transform = load_function("calculate_discount", version=1)
+        v2_transform = load_function("calculate_discount", version=2)
 
         print("\nComparison of different versions:")
-        print("Version 1.0.0 results:")
+        print("Version 1 results:")
         v1_transform(df).show()
 
-        print("Version 2.0.0 results:")
+        print("Version 2 results:")
         v2_transform(df).show()
 
 

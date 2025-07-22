@@ -3,6 +3,7 @@
 Demonstration of how our tests actually verify MLflow functionality.
 """
 
+import inspect
 import tempfile
 import os
 import mlflow
@@ -70,7 +71,9 @@ def main():
 
         print("\n2️⃣ REGISTERING FUNCTION IN MLFLOW")
         print("-" * 40)
-
+        print()
+        print(inspect.getsource(demo_transform))
+        print()
         # Create sample data for signature inference
         sample_data = spark.createDataFrame(
             [
@@ -143,8 +146,15 @@ def main():
         print("-" * 40)
 
         # This is exactly what our tests do to verify round-trip functionality
-        loaded_function = load_function("test.demo.transform", validate_input=True)
+        loaded_function = load_function(
+            "test.demo.transform",
+            version=1,
+            validate_input=True,
+        )
         print("✅ Function loaded successfully")
+        print()
+        print(inspect.getsource(loaded_function))
+        print()
 
         print("\n5️⃣ TESTING LOADED FUNCTION")
         print("-" * 40)
@@ -196,7 +206,11 @@ def main():
 
         # Test that we can load the function again in a new "session"
         # (This simulates what happens across test runs)
-        loaded_again = load_function("test.demo.transform", validate_input=False)
+        loaded_again = load_function(
+            "test.demo.transform",
+            version=1,
+            validate_input=False,
+        )
 
         final_test = spark.createDataFrame([(99, 999.0)], ["id", "amount"])
         final_result = loaded_again(final_test)
