@@ -7,7 +7,18 @@
       "Bash(uv run:*)",
       "Bash(make test:*)",
       "Bash(make:*)",
-      "Bash(uv sync:*)"
+      "Bash(uv sync:*)",
+      "mcp__language-server__diagnostics",
+      "mcp__language-server__hover",
+      "Bash(git reset:*)",
+      "WebFetch(domain:mlflow.org)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(mkdir:*)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(ls:*)",
+      "Bash(python:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

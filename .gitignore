@@ -21,9 +21,13 @@ Makefile.*
 .idea/
 .python-version
 venv/
-
 *.env
 *.parquet
 *.csv
 *.log
 *.xlsx
+.pytest_cache/
+.ruff_cache/
+spark-warehouse/
+mlruns/
+__pycache__/

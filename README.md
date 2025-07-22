@@ -1,275 +1,267 @@
 # PySpark Transform Registry
 
-A PySpark transform registry with MLflow integration for logging, versioning, and retrieving PySpark data transformation functions. This package enables reproducible data processing pipelines by persisting transform functions with metadata and allowing them to be reloaded later.
-
-## Features
-
-- **Function Persistence**: Log PySpark transform functions as artifacts in MLflow with complete source code and metadata
-- **Reproducible Pipelines**: Reload previously logged transform functions for consistent data processing workflows
-- **Version Management**: Track multiple versions of transform functions with semantic versioning and search capabilities
-- **Type Safety**: Validate transform inputs using Python type hints to ensure data compatibility
-- **Metadata Preservation**: Capture function signatures, parameters, return types, and docstrings
-- **MLflow Integration**: Leverage MLflow's experiment tracking, artifact storage, and search capabilities
-
-## Requirements
-
-- Python 3.11+
-- Java 17+ with security manager enabled
-- PySpark < 4.0
-- MLflow 2.22.0+
+A simplified library for registering and loading PySpark transform functions using MLflow's model registry.
 
 ## Installation
-
-### Using pip
 
 ```bash
 pip install pyspark-transform-registry
 ```
 
-### Using uv (recommended for development)
-
-```bash
-uv add pyspark-transform-registry
-```
-
-### Development Installation
-
-```bash
-git clone <repository-url>
-cd pyspark_transform_registry
-make install
-# or
-uv sync --extra dev
-```
-
 ## Quick Start
 
-### Basic Usage
+### Register a Function
 
 ```python
-import mlflow
-from pyspark.sql import SparkSession
-from pyspark_transform_registry import (
-    log_transform_function,
-    load_transform_function,
-    find_transform_versions
+from pyspark_transform_registry import register_function
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import col
+
+def clean_data(df: DataFrame) -> DataFrame:
+    """Remove invalid records and standardize data."""
+    return df.filter(col("amount") > 0).withColumn("status", lit("clean"))
+
+# Register the function
+model_uri = register_function(
+    func=clean_data,
+    name="analytics.etl.clean_data",
+    description="Data cleaning transformation"
 )
+```
 
-# Initialize Spark session
-spark = SparkSession.builder.appName("TransformRegistry").getOrCreate()
+### Load and Use a Function
 
-# Set up MLflow tracking
-mlflow.set_tracking_uri("your-mlflow-tracking-uri")
-mlflow.set_experiment("transform-registry")
+```python
+from pyspark_transform_registry import load_function
 
-# Define a transform function
-def add_profit_margin(df, margin_percent=0.15):
-    """Add profit margin column to sales data."""
-    return df.withColumn("profit_margin", df.price * margin_percent)
+# Load the registered function
+clean_data_func = load_function("analytics.etl.clean_data")
 
-# Log the transform function
-with mlflow.start_run():
-    log_transform_function(
-        transform_function=add_profit_margin,
-        function_name="add_profit_margin",
-        version="1.0.0",
-        description="Adds profit margin calculation to sales data"
+# Use it on your data
+result = clean_data_func(your_dataframe)
+```
+
+## Features
+
+- **Simple API**: Just two main functions - `register_function()` and `load_function()`
+- **Direct Registration**: Register functions directly from Python code
+- **File-based Registration**: Load and register functions from Python files
+- **Automatic Versioning**: Integer-based versioning with automatic incrementing
+- **MLflow Integration**: Built on MLflow's model registry with automatic dependency inference
+- **3-Part Naming**: Supports hierarchical naming (catalog.schema.table)
+- **Runtime Validation**: Automatic schema inference and DataFrame validation before execution
+- **Type Safety**: Validate input DataFrames against inferred schema constraints
+- **Flexible Validation**: Support for both strict and permissive validation modes
+
+## Usage Examples
+
+### Direct Function Registration
+
+```python
+from pyspark_transform_registry import register_function
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import col, when
+
+def risk_scorer(df: DataFrame, threshold: float = 100.0) -> DataFrame:
+    """Calculate risk scores based on amount."""
+    return df.withColumn(
+        "risk_score",
+        when(col("amount") > threshold, "high").otherwise("low")
     )
 
-# Load and use the transform function
-loaded_transform = load_transform_function(
-    function_name="add_profit_margin",
-    version="1.0.0"
+# Register with metadata
+register_function(
+    func=risk_scorer,
+    name="finance.scoring.risk_scorer",
+    description="Risk scoring transformation",
+    extra_pip_requirements=["numpy>=1.20.0"],
+    tags={"team": "finance", "category": "scoring"}
 )
-
-# Apply the loaded transform
-df_with_margin = loaded_transform(sales_df, margin_percent=0.20)
 ```
 
-### Version Management
+### File-based Registration
 
 ```python
-from pyspark_transform_registry import (
-    find_transform_versions,
-    get_latest_version,
-    satisfies_version_constraint
-)
+# transforms/data_processors.py
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import col
 
-# Find all versions of a transform
-versions = find_transform_versions("add_profit_margin")
-print(f"Available versions: {versions}")
+def feature_engineer(df: DataFrame) -> DataFrame:
+    """Create engineered features."""
+    return df.withColumn("feature_1", col("amount") * 2)
 
-# Get the latest version
-latest = get_latest_version(versions)
-print(f"Latest version: {latest}")
-
-# Check version constraints
-if satisfies_version_constraint("1.2.0", ">=1.0.0"):
-    print("Version satisfies constraint")
+def data_validator(df: DataFrame) -> DataFrame:
+    """Validate data quality."""
+    return df.filter(col("amount").isNotNull())
 ```
 
-### Input Validation
+```python
+# Register from file
+register_function(
+    file_path="transforms/data_processors.py",
+    function_name="feature_engineer",
+    name="ml.features.feature_engineer",
+    description="Feature engineering pipeline"
+)
+```
+
+### Loading and Versioning
 
 ```python
-from pyspark_transform_registry import validate_transform_input
+from pyspark_transform_registry import load_function, list_registered_functions
 
-# Validate input types before applying transform
-def typed_transform(df: DataFrame, multiplier: float) -> DataFrame:
-    """Transform with type hints for validation."""
-    return df.withColumn("result", df.value * multiplier)
+# Load latest version
+transform = load_function("finance.scoring.risk_scorer")
 
-# Validate inputs match function signature
-try:
-    validate_transform_input(typed_transform, sales_df, multiplier=2.0)
-    result = typed_transform(sales_df, multiplier=2.0)
-except TypeError as e:
-    print(f"Input validation failed: {e}")
+# Load specific version
+transform_v2 = load_function("finance.scoring.risk_scorer", version=2)
+
+# List all registered functions
+functions = list_registered_functions()
+for func in functions:
+    print(f"{func['name']} - Version {func['latest_version']}")
+```
+
+### Runtime Validation
+
+The registry automatically infers schema constraints from your functions and validates input DataFrames before execution.
+
+```python
+from pyspark_transform_registry import register_function, load_function
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import col, lit
+
+def process_orders(df: DataFrame) -> DataFrame:
+    """Process order data with specific column requirements."""
+    return (df
+        .filter(col("amount") > 0)
+        .withColumn("processed", lit(True))
+        .select("order_id", "customer_id", "amount", "processed")
+    )
+
+# Register with automatic schema inference
+register_function(
+    func=process_orders,
+    name="retail.processing.process_orders",
+    infer_schema=True  # Default: True
+)
+
+# Load with validation enabled (default)
+transform = load_function("retail.processing.process_orders")
+
+# This will validate the DataFrame structure before processing
+result = transform(orders_df)  # Validates: order_id, customer_id, amount columns exist
+
+# Load with validation disabled
+transform_no_validation = load_function(
+    "retail.processing.process_orders",
+    validate_input=False
+)
+
+# Load with strict validation (warnings become errors)
+transform_strict = load_function(
+    "retail.processing.process_orders",
+    strict_validation=True
+)
+```
+
+### Multi-Parameter Functions with Validation
+
+```python
+def filter_by_category(df: DataFrame, category: str, min_amount: float = 0.0) -> DataFrame:
+    """Filter data by category and minimum amount."""
+    return df.filter(
+        (col("category") == category) &
+        (col("amount") >= min_amount)
+    )
+
+# Register with example for signature inference
+sample_df = spark.createDataFrame([
+    ("electronics", 100.0, "order_1"),
+    ("books", 25.0, "order_2")
+], ["category", "amount", "order_id"])
+
+register_function(
+    func=filter_by_category,
+    name="retail.filtering.filter_by_category",
+    input_example=sample_df,
+    example_params={"category": "electronics", "min_amount": 50.0}
+)
+
+# Load and use with parameters
+filter_func = load_function("retail.filtering.filter_by_category")
+
+# Use with validation - validates DataFrame structure before filtering
+electronics = filter_func(orders_df, params={"category": "electronics", "min_amount": 100.0})
 ```
 
 ## API Reference
 
-### Core Functions
+### `register_function()`
 
-#### `log_transform_function(transform_function, function_name, version, description=None)`
-
-Log a PySpark transform function to MLflow with metadata.
+Register a PySpark transform function in MLflow's model registry.
 
 **Parameters:**
-- `transform_function`: The PySpark transform function to log
-- `function_name`: Name identifier for the function
-- `version`: Semantic version string (e.g., "1.0.0")
-- `description`: Optional description of the function
-
-**Example:**
-```python
-log_transform_function(
-    transform_function=my_transform,
-    function_name="data_cleaner",
-    version="1.0.0",
-    description="Cleans and validates input data"
-)
-```
-
-#### `load_transform_function(function_name, version)`
-
-Load a previously logged transform function from MLflow.
-
-**Parameters:**
-- `function_name`: Name of the function to load
-- `version`: Version string of the function to load
+- `func` (Callable, optional): The function to register (for direct registration)
+- `name` (str): Model name for registry (supports 3-part naming)
+- `file_path` (str, optional): Path to Python file containing the function
+- `function_name` (str, optional): Name of function to extract from file
+- `input_example` (DataFrame, optional): Sample input DataFrame for signature inference
+- `example_params` (dict, optional): Example parameters for multi-parameter functions
+- `description` (str, optional): Model description
+- `extra_pip_requirements` (list, optional): Additional pip requirements
+- `tags` (dict, optional): Tags to attach to the registered model
+- `infer_schema` (bool, optional): Whether to automatically infer schema constraints (default: True)
+- `schema_constraint` (PartialSchemaConstraint, optional): Pre-computed schema constraint
 
 **Returns:**
-- Callable transform function
+- `str`: Model URI of the registered model
 
-**Example:**
-```python
-transform = load_transform_function("data_cleaner", "1.0.0")
-cleaned_df = transform(raw_df)
-```
+### `load_function()`
 
-#### `find_transform_versions(function_name, experiment_name=None)`
-
-Find all versions of a transform function.
+Load a previously registered PySpark transform function with optional validation.
 
 **Parameters:**
-- `function_name`: Name of the function to search for
-- `experiment_name`: Optional experiment name to search within
+- `name` (str): Model name in registry
+- `version` (int or str, optional): Model version to load (defaults to latest)
+- `validate_input` (bool, optional): Whether to validate input DataFrames against stored schema constraints (default: True)
+- `strict_validation` (bool, optional): If True, treat validation warnings as errors (default: False)
 
 **Returns:**
-- List of version strings
+- `Callable`: The loaded transform function that supports both single and multi-parameter usage:
+  - Single param: `transform(df)`
+  - Multi param: `transform(df, params={'param1': value1, 'param2': value2})`
 
-### Validation Functions
+### `list_registered_functions()`
 
-#### `validate_transform_input(transform_function, *args, **kwargs)`
-
-Validate that input arguments match the function's type hints.
+List registered transform functions.
 
 **Parameters:**
-- `transform_function`: Function with type hints to validate against
-- `*args, **kwargs`: Arguments to validate
+- `name_prefix` (str, optional): Optional prefix to filter model names
 
-**Raises:**
-- `TypeError`: If arguments don't match expected types
+**Returns:**
+- `list`: List of registered models with their metadata
 
-### Version Management
+## Requirements
 
-#### `parse_semantic_version(version_string)`
-
-Parse a semantic version string into components.
-
-#### `validate_semantic_version(version_string)`
-
-Validate that a version string follows semantic versioning.
-
-#### `get_latest_version(versions)`
-
-Get the latest version from a list of version strings.
-
-#### `satisfies_version_constraint(version, constraint)`
-
-Check if a version satisfies a version constraint.
+- Python 3.11+
+- PySpark 3.0+
+- MLflow 2.22+
 
 ## Development
 
-### Setup
-
 ```bash
-make install
-uv run --extra dev pre-commit install
-```
+# Install development dependencies
+pip install -e ".[dev]"
 
-### Testing
-
-```bash
-# Run all tests
-make test
-
-# Run tests with verbose output
-make test-verbose
-
-# Run specific test file
-uv run --extra dev pytest tests/test_transform_registry.py
-```
-
-### Code Quality
-
-```bash
-# Run all quality checks
-make check
+# Run tests
+pytest
 
 # Run linting
-make lint
-
-# Run formatting
-make format
+ruff check --fix
+ruff format
 ```
-
-### Building
-
-```bash
-make build
-```
-
-## Environment Requirements
-
-- **Java 17+**: Required for PySpark with security manager enabled
-- **PySpark**: Configured for local[2] execution mode in tests
-- **MLflow**: Uses temporary local tracking for test isolation
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests and quality checks (`make check`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
 
 ## License
 
-[Add your license information here]
-
-## Support
-
-[Add support information here]
+MIT License

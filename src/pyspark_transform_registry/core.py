@@ -1,173 +1,386 @@
-import datetime
+"""
+Simplified PySpark Transform Registry Core Module
+
+This module provides a clean, simple interface for registering and loading
+PySpark transform functions using MLflow's model registry.
+"""
+
 import importlib.util
-import inspect
-import json
+import logging
 import os
-import tempfile
-from typing import Callable, Optional
+from typing import Callable, Optional, Union, Any
 
 import mlflow
-from pyspark.sql import SparkSession
+import mlflow.pyfunc
+import mlflow.models
+from pyspark.sql import DataFrame
 
-from .metadata import _get_function_metadata, _wrap_function_source
-from .versioning import generate_next_version, parse_semantic_version
+from .model_wrapper import PySparkTransformModel
+from .static_analysis import analyze_function
+from .schema_constraints import PartialSchemaConstraint
+from .runtime_validation import RuntimeValidator
 
-spark = SparkSession.getActiveSession()
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 
-def log_transform_function(
-    func: Callable,
+def register_function(
+    func: Optional[Callable] = None,
+    *,
     name: str,
-    artifact_path: str = "transform_code",
-    as_text: bool = True,
-    version: Optional[str] = None,
-    version_bump: Optional[str] = None,
-):
+    file_path: Optional[str] = None,
+    function_name: Optional[str] = None,
+    input_example: Optional[DataFrame] = None,
+    example_params: Optional[dict[str, Any]] = None,
+    description: Optional[str] = None,
+    extra_pip_requirements: Optional[list[str]] = None,
+    tags: Optional[dict[str, Any]] = None,
+    infer_schema: bool = True,
+    schema_constraint: Optional[PartialSchemaConstraint] = None,
+) -> str:
     """
-    Logs a PySpark transform function's source code to MLflow, with metadata and versioning.
+    Register a PySpark transform function in MLflow's model registry.
+
+    Supports two modes:
+    1. Direct function registration: pass the function directly
+    2. File-based registration: load function from Python file
 
     Args:
-        func: The function to log
-        name: Name for the logged function
-        artifact_path: Path where to store the artifact
-        as_text: If True, logs source code directly as text using mlflow.log_text().
-                 If False, logs source code as a file artifact using mlflow.log_artifact().
-        version: Optional explicit semantic version (e.g., "1.2.0")
-        version_bump: Optional explicit version bump type ("major", "minor", "patch")
+        func: The function to register (for direct registration)
+        name: Model name for registry (supports 3-part naming: catalog.schema.table)
+        file_path: Path to Python file containing the function (for file-based registration)
+        function_name: Name of function to extract from file (required for file-based)
+        input_example: Sample input DataFrame for signature inference
+        example_params: Example parameters for multi-parameter functions (for signature inference)
+        description: Model description
+        extra_pip_requirements: Additional pip requirements beyond auto-detected ones
+        tags: Tags to attach to the registered model
+        infer_schema: Whether to automatically infer schema constraints using static analysis
+        schema_constraint: Pre-computed schema constraint (overrides infer_schema if provided)
+
+    Returns:
+        Model URI of the registered model
+
+    Examples:
+        # Direct function registration
+        >>> def my_transform(df: DataFrame) -> DataFrame:
+        ...     return df.select("*")
+        >>> register_function(my_transform, name="my_catalog.my_schema.my_transform")
+
+        # Multi-parameter function registration
+        >>> def filter_transform(df: DataFrame, min_value: int = 0) -> DataFrame:
+        ...     return df.filter(df.value >= min_value)
+        >>> register_function(
+        ...     filter_transform,
+        ...     name="my_catalog.my_schema.filter_transform",
+        ...     input_example=sample_df,
+        ...     example_params={"min_value": 10}
+        ... )
+
+        # File-based registration
+        >>> register_function(
+        ...     file_path="transforms/my_transform.py",
+        ...     function_name="my_transform",
+        ...     name="my_catalog.my_schema.my_transform"
+        ... )
     """
-    source = inspect.getsource(func)
-    param_info, return_type, doc = _get_function_metadata(func)
-    wrapped_source = _wrap_function_source(name, source, doc, param_info, return_type)
-    filename = f"{name}.py"
+    # Validate input arguments
+    if func is None and file_path is None:
+        raise ValueError("Either 'func' or 'file_path' must be provided")
 
-    # Log the source code
-    if as_text:
-        # Log source code directly as text artifact
-        mlflow.log_text(wrapped_source, f"{artifact_path}/{filename}")
-    else:
-        # Log source code as file artifact
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, filename)
-            with open(path, "w") as f:
-                f.write(wrapped_source)
-            mlflow.log_artifact(path, artifact_path)
+    if func is not None and file_path is not None:
+        raise ValueError("Cannot specify both 'func' and 'file_path'")
 
-    # Handle versioning
-    if version is not None:
-        # Validate and use explicit version
-        semantic_version = parse_semantic_version(version)
-    else:
-        # Auto-generate version based on interface changes
-        semantic_version = generate_next_version(name, func, version_bump)
+    if file_path is not None and function_name is None:
+        raise ValueError("'function_name' is required when using 'file_path'")
 
-    # Log metadata using different MLflow features
-    # Tags for categorization and versioning
-    mlflow.set_tag("transform_type", "pyspark")
-    mlflow.set_tag("transform_name", name)
-    mlflow.set_tag("semantic_version", str(semantic_version))
+    # Load function from file if needed
+    if file_path is not None:
+        func = _load_function_from_file(file_path, function_name)
 
-    # Parameters for structured data
-    mlflow.log_param("transform_name", name)
-    mlflow.log_param("return_type", return_type or "unspecified")
-    mlflow.log_param("param_info", json.dumps(param_info))
-    mlflow.log_param("major_version", semantic_version.major)
-    mlflow.log_param("minor_version", semantic_version.minor)
-    mlflow.log_param("patch_version", semantic_version.patch)
+    # Perform schema inference if requested
+    inferred_constraint = None
+    if schema_constraint is not None:
+        # Use provided constraint
+        inferred_constraint = schema_constraint
+    elif infer_schema:
+        # Automatically infer schema constraint using static analysis
+        try:
+            inferred_constraint = analyze_function(func)
+        except Exception as e:
+            logger.warning(
+                "Schema inference failed, proceeding without constraint: %s",
+                e,
+            )
+            inferred_constraint = None
 
-    # Log docstring as a parameter (since it might be long)
-    mlflow.log_param("docstring", doc)
+    # Create model wrapper
+    model = PySparkTransformModel(func, schema_constraint=inferred_constraint)
 
-    # Log timestamp as a metric for versioning
-    mlflow.log_metric(
-        "timestamp",
-        datetime.datetime.now(datetime.timezone.utc).timestamp(),
-    )
+    # Prepare MLflow logging parameters
+    log_params = {
+        "python_model": model,
+        "registered_model_name": name,
+        "infer_code_paths": True,  # Auto-detect Python modules
+        "extra_pip_requirements": extra_pip_requirements,
+        "tags": tags or {},
+    }
+
+    # Add input example and infer signature if provided
+    if input_example is not None:
+        try:
+            # Convert Spark DataFrame to pandas for MLflow
+            pandas_input_example = input_example.toPandas()
+            log_params["input_example"] = pandas_input_example
+
+            # Infer signature using original DataFrames
+            # For multi-parameter functions, use example_params if provided
+            if example_params is not None:
+                output_example = model.predict(input_example, params=example_params)
+                pandas_output_example = output_example.toPandas()
+                # Include params in signature for multi-parameter functions
+                log_params["signature"] = mlflow.models.infer_signature(
+                    pandas_input_example,
+                    pandas_output_example,
+                    params=example_params,
+                )
+            else:
+                output_example = model.predict(input_example)
+                pandas_output_example = output_example.toPandas()
+                log_params["signature"] = mlflow.models.infer_signature(
+                    pandas_input_example,
+                    pandas_output_example,
+                )
+        except Exception as e:
+            # If pandas conversion fails, skip input example but log without it
+            logger.warning("Could not convert input example to pandas, skipping: %s", e)
+            pass
+
+    # Add description as metadata
+    if description:
+        log_params["tags"]["description"] = description
+
+    # Add function metadata
+    log_params["tags"]["function_name"] = func.__name__
+    if func.__doc__:
+        log_params["tags"]["docstring"] = func.__doc__
+
+    # Add schema constraint metadata
+    if inferred_constraint is not None:
+        log_params["tags"]["schema_constraint"] = inferred_constraint.to_json()
+        log_params["tags"]["schema_analysis_method"] = (
+            inferred_constraint.analysis_method
+        )
+        log_params["tags"]["schema_required_columns"] = len(
+            inferred_constraint.required_columns,
+        )
+        log_params["tags"]["schema_added_columns"] = len(
+            inferred_constraint.added_columns,
+        )
+        log_params["tags"]["schema_preserves_others"] = str(
+            inferred_constraint.preserves_other_columns,
+        )
+
+        if inferred_constraint.warnings:
+            log_params["tags"]["schema_warnings"] = "; ".join(
+                inferred_constraint.warnings,
+            )
+
+    # Log the model - handle nested runs if already in a run
+    try:
+        # Check if there's already an active run
+        active_run = mlflow.active_run()
+        if active_run is not None:
+            # Use nested run
+            with mlflow.start_run(nested=True):
+                # Set tags explicitly in the run
+                for tag_key, tag_value in log_params["tags"].items():
+                    mlflow.set_tag(tag_key, tag_value)
+
+                # Use the registered model name for MLflow 3.0+
+                mlflow.pyfunc.log_model(name=name, **log_params)
+        else:
+            # Start a new run
+            with mlflow.start_run():
+                # Set tags explicitly in the run
+                for tag_key, tag_value in log_params["tags"].items():
+                    mlflow.set_tag(tag_key, tag_value)
+
+                # Use the registered model name for MLflow 3.0+
+                mlflow.pyfunc.log_model(name=name, **log_params)
+    except Exception:
+        # Fallback: try with nested=True
+        with mlflow.start_run(nested=True):
+            # Set tags explicitly in the run
+            for tag_key, tag_value in log_params["tags"].items():
+                mlflow.set_tag(tag_key, tag_value)
+
+            # Use a simple artifact name but register with the full name
+            artifact_name = func.__name__ if func else function_name
+            mlflow.pyfunc.log_model(artifact_path=artifact_name, **log_params)
+
+    # Return the model URI string
+    return f"models:/{name}/1"
 
 
-def load_transform_function(
-    run_id: str,
+def load_function(
     name: str,
-    artifact_path: str = "transform_code",
+    version: Union[int, str],
+    validate_input: bool = True,
+    strict_validation: bool = False,
 ) -> Callable:
     """
-    Loads a logged transform function from an MLflow run using importlib.
-    """
-    filename = f"{artifact_path}/{name}.py"
-    path = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=filename)
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ValueError(f"Could not create module spec for {name}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    Load a previously registered PySpark transform function with optional validation.
 
-    func = getattr(mod, name, None)
+    Args:
+        name: Model name in registry (supports 3-part naming: catalog.schema.table)
+        version: Model version to load (required)
+        validate_input: Whether to validate input DataFrames against stored schema constraints
+        strict_validation: If True, treat validation warnings as errors
+
+    Returns:
+        A callable that supports both single and multi-parameter usage:
+        - Single param: transform(df)
+        - Multi param: transform(df, params={'param1': value1, 'param2': value2})
+
+        If validation is enabled, input DataFrames will be validated against the
+        stored schema constraints before transformation.
+
+    Examples:
+        # Load specific version with validation
+        >>> transform = load_function("my_catalog.my_schema.my_transform", version=1)
+
+        # Use with single parameter (validates input automatically)
+        >>> result = transform(df)
+
+        # Use with multiple parameters (validates input automatically)
+        >>> result = transform(df, params={'min_value': 10, 'threshold': 0.5})
+
+        # Load specific version without validation
+        >>> transform = load_function("my_catalog.my_schema.my_transform", version=2, validate_input=False)
+
+        # Load with strict validation (warnings become errors)
+        >>> transform = load_function("my_catalog.my_schema.my_transform", version=1, strict_validation=True)
+    """
+    # Build model URI with explicit version
+    model_uri = f"models:/{name}/{version}"
+
+    # Load the model
+    loaded_model = mlflow.pyfunc.load_model(model_uri)
+
+    # Get the original transform function directly from the model wrapper
+    # This bypasses MLflow's predict() method which doesn't handle params properly
+    # Access the underlying python model via _model_impl.python_model
+    original_func = loaded_model._model_impl.python_model.get_transform_function()
+
+    # Extract schema constraint from model metadata if validation is enabled
+    schema_constraint = None
+    if validate_input:
+        schema_constraint = _load_schema_constraint(name, version)
+
+    # Create a wrapper function that handles both single and multi-parameter calls
+    def transform_wrapper(df: DataFrame, params: Optional[dict] = None):
+        """
+        Wrapper function that supports both single and multi-parameter usage with optional validation.
+
+        Args:
+            df: Input PySpark DataFrame
+            params: Optional dictionary of additional parameters for multi-input functions
+
+        Returns:
+            Transformed DataFrame
+
+        Raises:
+            ValueError: If input validation fails and strict_validation is True
+        """
+        # Perform input validation if enabled and constraint is available
+        if validate_input and schema_constraint is not None:
+            validator = RuntimeValidator(strict_mode=strict_validation)
+            validation_result = validator.validate_dataframe(df, schema_constraint)
+
+            if not validation_result.is_valid:
+                error_messages = validation_result.get_error_messages()
+                raise ValueError(
+                    f"Input validation failed: {'; '.join(error_messages)}",
+                )
+
+            # Log warnings if any (but don't fail the execution)
+            warnings = validation_result.get_warning_messages()
+            if warnings:
+                for warning in warnings:
+                    print(f"Validation warning: {warning}")
+
+        # Execute the transform function
+        if params is None:
+            # Single parameter function call
+            return original_func(df)
+        else:
+            # Multi-parameter function call
+            return original_func(df, **params)
+
+    return transform_wrapper
+
+
+def _load_function_from_file(file_path: str, function_name: str) -> Callable:
+    """
+    Load a function from a Python file.
+
+    Args:
+        file_path: Path to the Python file
+        function_name: Name of the function to extract
+
+    Returns:
+        The loaded function
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    # Load the module
+    spec = importlib.util.spec_from_file_location("transform_module", file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Get the function
+    if not hasattr(module, function_name):
+        raise AttributeError(f"Function '{function_name}' not found in {file_path}")
+
+    func = getattr(module, function_name)
+
     if not callable(func):
-        raise ValueError(f"No callable named '{name}' found in artifact module.")
+        raise TypeError(f"'{function_name}' is not a function")
+
     return func
 
 
-def find_transform_versions(
-    name: str = None,
-    return_type: str = None,
-    version_constraint: str = None,
-    latest_only: bool = False,
-):
+def _load_schema_constraint(
+    name: str,
+    version: Union[int, str],
+) -> Optional[PartialSchemaConstraint]:
     """
-    Find transform versions using MLflow search capabilities.
+    Load schema constraint from MLflow model metadata.
 
     Args:
-        name: Optional filter by transform name
-        return_type: Optional filter by return type
-        version_constraint: Optional version constraint (e.g., ">=1.0.0,<2.0.0")
-        latest_only: If True, return only the latest version
+        name: Model name in registry
+        version: Model version
 
     Returns:
-        List of MLflow runs containing the transforms
+        PartialSchemaConstraint if found, None otherwise
     """
-    # Use parameters for structured data search
-    filter_string = "tags.transform_type = 'pyspark'"
-    if name is not None:
-        filter_string += f" AND params.transform_name = '{name}'"
-    if return_type is not None:
-        filter_string += f" AND params.return_type = '{return_type}'"
+    try:
+        client = mlflow.tracking.MlflowClient()
+        model_version = client.get_model_version(name, str(version))
+        run = client.get_run(model_version.run_id)
 
-    # Get all matching runs
-    runs = mlflow.search_runs(filter_string=filter_string, order_by=["start_time DESC"])
+        constraint_json = run.data.tags.get("schema_constraint")
+        if constraint_json:
+            return PartialSchemaConstraint.from_json(constraint_json)
 
-    # Apply version constraint filtering if specified
-    if version_constraint is not None:
-        from .versioning import satisfies_version_constraint
+    except Exception as e:
+        logger.warning(
+            "Could not load schema constraint for %s v%s, proceeding without validation: %s",
+            name,
+            version,
+            e,
+        )
 
-        filtered_indices = []
-        for idx, run in runs.iterrows():
-            semantic_version_col = "tags.semantic_version"
-            if semantic_version_col in run and run[semantic_version_col] is not None:
-                try:
-                    version = parse_semantic_version(run[semantic_version_col])
-                    if satisfies_version_constraint(version, version_constraint):
-                        filtered_indices.append(idx)
-                except ValueError:
-                    # Skip invalid version formats
-                    continue
-        runs = runs.loc[filtered_indices] if filtered_indices else runs.iloc[0:0]
-
-    # Return only latest version if requested
-    if latest_only and len(runs) > 0:
-        # Find the run with the highest semantic version
-        latest_idx = None
-        latest_version = None
-
-        for idx, run in runs.iterrows():
-            semantic_version_col = "tags.semantic_version"
-            if semantic_version_col in run and run[semantic_version_col] is not None:
-                try:
-                    version = parse_semantic_version(run[semantic_version_col])
-                    if latest_version is None or version > latest_version:
-                        latest_version = version
-                        latest_idx = idx
-                except ValueError:
-                    continue
-
-        return runs.loc[[latest_idx]] if latest_idx is not None else runs.iloc[0:0]
-
-    return runs
+    return None

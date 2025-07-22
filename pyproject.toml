@@ -1,12 +1,13 @@
 [project]
 name = "pyspark-transform-registry"
-version = "0.1.0"
+version = "1.0.0"
 description = "A PySpark transform registry with MLflow integration. Requires Java 17+ with security manager enabled."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "mlflow>=2.22.0",
+    "mlflow>=3.0.0",
     "pyspark<4.0",
+    "libcst>=1.0.0",
 ]
 
 [build-system]
@@ -22,9 +23,15 @@ dev = [
     "requests>=2.0.0",
     "pre-commit>=4.2.0",
     "ruff>=0.7.0",
+    "typing-extensions>=4.0.0",
 ]
 
 [[tool.uv.index]]
 name = "pyspark"
 url = "https://pypi.org/simple"
 default = true
+
+[dependency-groups]
+dev = [
+    "pip>=25.1.1",
+]
