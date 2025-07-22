@@ -105,7 +105,10 @@ def test_function_with_required_parameters(sample_df, mlflow_tracking):
     )
 
     # Load the function
-    loaded_transform = load_function("test_registry.required_param_transform", version=1)
+    loaded_transform = load_function(
+        "test_registry.required_param_transform",
+        version=1,
+    )
 
     # Test that calling without required params fails appropriately
     with pytest.raises(TypeError):

@@ -1,7 +1,7 @@
 import inspect
 import textwrap
 import typing
-from typing import Callable, Optional
+from collections.abc import Callable
 
 
 def _resolve_fully_qualified_name(obj):
@@ -42,7 +42,7 @@ def _wrap_function_source(
     source: str,
     doc: str,
     param_info,
-    return_type: Optional[str],
+    return_type: str | None,
 ):
     """
     Creates a wrapped version of the function's source code with parameter and return type metadata

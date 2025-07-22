@@ -118,7 +118,10 @@ class TestEndToEndWorkflow:
 
         # Load and test individual functions
         data_cleaner = load_function("pipeline.clean.data_cleaner", version=1)
-        feature_engineer = load_function("pipeline.features.feature_engineer", version=1)
+        feature_engineer = load_function(
+            "pipeline.features.feature_engineer",
+            version=1,
+        )
         ml_scorer = load_function("pipeline.ml.ml_scorer", version=1)
         full_pipeline = load_function("pipeline.complete.full_pipeline", version=1)
 

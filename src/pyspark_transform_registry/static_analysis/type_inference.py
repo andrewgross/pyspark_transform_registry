@@ -6,7 +6,7 @@ and transformations, helping to build accurate schema constraints.
 """
 
 import libcst as cst
-from typing import Optional, Any
+from typing import Any
 from dataclasses import dataclass
 
 
@@ -17,7 +17,7 @@ class TypeInference:
     column_name: str
     inferred_type: str  # PySpark type string
     source: str  # "literal", "function", "operation", "annotation"
-    context: Optional[str] = None  # Additional context
+    context: str | None = None  # Additional context
 
     def __post_init__(self):
         # Normalize PySpark types
@@ -54,7 +54,7 @@ class TypeInferenceEngine(cst.CSTVisitor):
         self.function_signatures: dict[str, str] = self._load_function_signatures()
 
         # Track current context
-        self.current_column_name: Optional[str] = None
+        self.current_column_name: str | None = None
         self.expression_stack: list[cst.BaseExpression] = []
 
         # Type inference rules
@@ -125,7 +125,7 @@ class TypeInferenceEngine(cst.CSTVisitor):
         except Exception:
             pass
 
-    def _analyze_pyspark_function(self, node: cst.Call) -> Optional[str]:
+    def _analyze_pyspark_function(self, node: cst.Call) -> str | None:
         """Analyze PySpark function calls and return inferred type."""
         if not isinstance(node.func, cst.Attribute):
             return None
@@ -250,7 +250,7 @@ class TypeInferenceEngine(cst.CSTVisitor):
                     context=f"renamed from {old_name}",
                 )
 
-    def _infer_type_from_expression(self, expr: cst.BaseExpression) -> Optional[str]:
+    def _infer_type_from_expression(self, expr: cst.BaseExpression) -> str | None:
         """Infer type from a general expression."""
         if isinstance(expr, cst.SimpleString):
             return "string"
@@ -285,7 +285,7 @@ class TypeInferenceEngine(cst.CSTVisitor):
 
         return None
 
-    def _infer_binary_operation_type(self, expr: cst.BinaryOperation) -> Optional[str]:
+    def _infer_binary_operation_type(self, expr: cst.BinaryOperation) -> str | None:
         """Infer type from binary operations."""
         left_type = self._infer_type_from_expression(expr.left)
         right_type = self._infer_type_from_expression(expr.right)
@@ -327,7 +327,7 @@ class TypeInferenceEngine(cst.CSTVisitor):
 
         return None
 
-    def _infer_type_from_value(self, value: cst.BaseExpression) -> Optional[str]:
+    def _infer_type_from_value(self, value: cst.BaseExpression) -> str | None:
         """Infer type from a literal value."""
         if isinstance(value, cst.SimpleString):
             return "string"
@@ -340,13 +340,13 @@ class TypeInferenceEngine(cst.CSTVisitor):
                 return "boolean"
         return None
 
-    def _extract_string_literal(self, expr: cst.BaseExpression) -> Optional[str]:
+    def _extract_string_literal(self, expr: cst.BaseExpression) -> str | None:
         """Extract string literal value."""
         if isinstance(expr, cst.SimpleString):
             return expr.value.strip("'\"")
         return None
 
-    def _extract_type_annotation(self, annotation: cst.BaseExpression) -> Optional[str]:
+    def _extract_type_annotation(self, annotation: cst.BaseExpression) -> str | None:
         """Extract type from type annotation."""
         if isinstance(annotation, cst.Name):
             return annotation.value
@@ -402,7 +402,7 @@ class TypeInferenceEngine(cst.CSTVisitor):
         }
 
 
-def infer_expression_type(expression_code: str) -> Optional[str]:
+def infer_expression_type(expression_code: str) -> str | None:
     """
     Infer the type of a PySpark expression from source code.
 

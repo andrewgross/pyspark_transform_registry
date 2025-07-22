@@ -5,7 +5,6 @@ This module tests that function behavior, parameter handling, and MLflow metadat
 are properly preserved through the complete MLflow round-trip process.
 """
 
-from typing import Optional
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, lit
 import pytest
@@ -114,8 +113,8 @@ class TestFunctionalBehaviorFidelity:
 
         def complex_transform(
             df: DataFrame,
-            filter_values: Optional[list] = None,
-            column_mapping: Optional[dict] = None,
+            filter_values: list | None = None,
+            column_mapping: dict | None = None,
         ) -> DataFrame:
             """Transform with complex parameter types."""
             if filter_values is None:

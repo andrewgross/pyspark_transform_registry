@@ -6,7 +6,7 @@ and flow of data transformations in transform functions.
 """
 
 import libcst as cst
-from typing import Optional, Any
+from typing import Any
 from dataclasses import dataclass
 
 
@@ -19,7 +19,7 @@ class DataFrameOperation:
     )
     method_name: str
     args: list[str]  # String representations of arguments
-    line_number: Optional[int] = None
+    line_number: int | None = None
 
     def affects_schema(self) -> bool:
         """Check if this operation affects the DataFrame schema."""
@@ -117,7 +117,7 @@ class OperationAnalyzer(cst.CSTVisitor):
     def _analyze_dataframe_operation(
         self,
         node: cst.Call,
-    ) -> Optional[DataFrameOperation]:
+    ) -> DataFrameOperation | None:
         """Analyze if a call is a DataFrame operation and extract details."""
         if not isinstance(node.func, cst.Attribute):
             return None

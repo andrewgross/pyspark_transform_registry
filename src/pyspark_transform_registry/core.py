@@ -8,7 +8,8 @@ PySpark transform functions using MLflow's model registry.
 import importlib.util
 import logging
 import os
-from typing import Callable, Optional, Union, Any
+from typing import Any
+from collections.abc import Callable
 
 import mlflow
 import mlflow.pyfunc
@@ -25,18 +26,18 @@ logger = logging.getLogger(__name__)
 
 
 def register_function(
-    func: Optional[Callable] = None,
+    func: Callable | None = None,
     *,
     name: str,
-    file_path: Optional[str] = None,
-    function_name: Optional[str] = None,
-    input_example: Optional[DataFrame] = None,
-    example_params: Optional[dict[str, Any]] = None,
-    description: Optional[str] = None,
-    extra_pip_requirements: Optional[list[str]] = None,
-    tags: Optional[dict[str, Any]] = None,
+    file_path: str | None = None,
+    function_name: str | None = None,
+    input_example: DataFrame | None = None,
+    example_params: dict[str, Any] | None = None,
+    description: str | None = None,
+    extra_pip_requirements: list[str] | None = None,
+    tags: dict[str, Any] | None = None,
     infer_schema: bool = True,
-    schema_constraint: Optional[PartialSchemaConstraint] = None,
+    schema_constraint: PartialSchemaConstraint | None = None,
 ) -> str:
     """
     Register a PySpark transform function in MLflow's model registry.
@@ -225,7 +226,7 @@ def register_function(
 
 def load_function(
     name: str,
-    version: Union[int, str],
+    version: int | str,
     validate_input: bool = True,
     strict_validation: bool = False,
 ) -> Callable:
@@ -279,7 +280,7 @@ def load_function(
         schema_constraint = _load_schema_constraint(name, version)
 
     # Create a wrapper function that handles both single and multi-parameter calls
-    def transform_wrapper(df: DataFrame, params: Optional[dict] = None):
+    def transform_wrapper(df: DataFrame, params: dict | None = None):
         """
         Wrapper function that supports both single and multi-parameter usage with optional validation.
 
@@ -354,8 +355,8 @@ def _load_function_from_file(file_path: str, function_name: str) -> Callable:
 
 def _load_schema_constraint(
     name: str,
-    version: Union[int, str],
-) -> Optional[PartialSchemaConstraint]:
+    version: int | str,
+) -> PartialSchemaConstraint | None:
     """
     Load schema constraint from MLflow model metadata.
 

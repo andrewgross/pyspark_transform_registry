@@ -6,7 +6,7 @@ which columns are being accessed, added, modified, or removed.
 """
 
 import libcst as cst
-from typing import Optional, Any
+from typing import Any
 
 
 class ColumnReference:
@@ -16,7 +16,7 @@ class ColumnReference:
         self,
         column_name: str,
         access_type: str,
-        line_number: Optional[int] = None,
+        line_number: int | None = None,
     ):
         self.column_name = column_name
         self.access_type = access_type  # "read", "write", "conditional"
@@ -222,7 +222,7 @@ class ColumnAnalyzer(cst.CSTVisitor):
             # Analyze unary operations
             self._analyze_expression_for_columns(expr.expression, access_type)
 
-    def _extract_column_from_select_arg(self, arg: cst.Arg) -> Optional[str]:
+    def _extract_column_from_select_arg(self, arg: cst.Arg) -> str | None:
         """Extract column name from select() argument."""
         # Handle string literals
         column_name = self._extract_string_from_arg(arg)
@@ -245,14 +245,14 @@ class ColumnAnalyzer(cst.CSTVisitor):
             return node.func.attr.value == method_name
         return False
 
-    def _extract_string_from_arg(self, arg: cst.Arg) -> Optional[str]:
+    def _extract_string_from_arg(self, arg: cst.Arg) -> str | None:
         """Extract string value from function argument."""
         if isinstance(arg.value, cst.SimpleString):
             # Remove quotes and return string content
             return arg.value.value.strip("'\"")
         return None
 
-    def _extract_string_from_subscript(self, slice_expr) -> Optional[str]:
+    def _extract_string_from_subscript(self, slice_expr) -> str | None:
         """Extract string from subscript slice."""
         if isinstance(slice_expr, cst.Index):
             if isinstance(slice_expr.value, cst.SimpleString):

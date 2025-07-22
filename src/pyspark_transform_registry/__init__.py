@@ -7,7 +7,8 @@ functions with automatic dependency detection and signature inference.
 """
 
 import warnings
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 # Import the new simplified API
 from .core import (

@@ -1,7 +1,7 @@
 import inspect
 import pydoc
 import typing
-from typing import Callable
+from collections.abc import Callable
 
 import mlflow
 from pyspark.sql import DataFrame

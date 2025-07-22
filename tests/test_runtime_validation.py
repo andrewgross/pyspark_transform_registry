@@ -418,7 +418,6 @@ class TestComplexValidationScenarios:
 
         assert result.is_valid is True
 
-
     def test_validate_nullability_warnings(self, spark):
         """Test nullability validation warnings."""
         # Create DataFrame with nullable column

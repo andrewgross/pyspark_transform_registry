@@ -492,8 +492,16 @@ class TestValidationIntegration:
         )
 
         # Load function with and without validation
-        transform_with_validation = load_function(model_name, version=1, validate_input=True)
-        transform_without_validation = load_function(model_name, version=1, validate_input=False)
+        transform_with_validation = load_function(
+            model_name,
+            version=1,
+            validate_input=True,
+        )
+        transform_without_validation = load_function(
+            model_name,
+            version=1,
+            validate_input=False,
+        )
 
         # Measure execution time with validation
         start_time = time.time()

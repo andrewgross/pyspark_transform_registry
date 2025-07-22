@@ -13,6 +13,9 @@ help:
 	@echo "  build        - Build package"
 
 # Testing
+pre-commit:
+	uv run pre-commit run --all-files
+
 test:
 	uv run --dev pytest
 
@@ -33,6 +36,7 @@ setup: install
 
 install:
 	uv sync --dev
+	uv run pre-commit install
 
 build: clean
 	@echo "Building package..."
@@ -45,7 +49,7 @@ publish: build
 	@echo "Publish complete!"
 
 
-clean: 
+clean:
 	@echo "Cleaning up..."
 	@rm -rf __pycache__/ .pytest_cache/
 	@rm -rf category_indexer/

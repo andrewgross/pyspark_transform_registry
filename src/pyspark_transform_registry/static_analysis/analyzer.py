@@ -6,7 +6,7 @@ schema constraints from PySpark transform function source code.
 """
 
 import inspect
-from typing import Callable
+from collections.abc import Callable
 import libcst as cst
 
 from ..schema_constraints import PartialSchemaConstraint

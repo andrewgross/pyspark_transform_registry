@@ -80,7 +80,6 @@ class TestVersionedFunctionCompatibility:
         assert v3_result.count() == 3
         assert set(v3_result.columns) == {"id", "amount", "validated", "risk_score"}
 
-
     def test_parameter_evolution_compatibility(self, spark, mlflow_tracking):
         """Test that parameter signatures evolve compatibly across versions."""
 

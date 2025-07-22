@@ -1,5 +1,6 @@
 import inspect
-from typing import Any, Callable, Optional
+from typing import Any
+from collections.abc import Callable
 
 import mlflow
 import mlflow.pyfunc
@@ -17,7 +18,7 @@ class PySparkTransformModel(mlflow.pyfunc.PythonModel):
     def __init__(
         self,
         transform_func: Callable,
-        schema_constraint: Optional[Any] = None,
+        schema_constraint: Any | None = None,
     ):
         """
         Initialize the PySpark transform model wrapper.
@@ -37,8 +38,8 @@ class PySparkTransformModel(mlflow.pyfunc.PythonModel):
     def predict(
         self,
         context: Any,
-        model_input: Optional[Any] = None,
-        params: Optional[dict] = None,
+        model_input: Any | None = None,
+        params: dict | None = None,
     ) -> Any:
         """
         MLflow-required predict method that delegates to the wrapped transform function.
