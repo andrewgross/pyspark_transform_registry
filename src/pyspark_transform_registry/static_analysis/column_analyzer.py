@@ -17,11 +17,9 @@ class ColumnReference:
         self,
         column_name: str,
         access_type: str,
-        line_number: int | None = None,
     ):
         self.column_name = column_name
         self.access_type = access_type  # "read", "write", "conditional"
-        self.line_number = line_number
         self.context = None  # Additional context about the reference
 
     def __eq__(self, other):
@@ -59,6 +57,17 @@ class ColumnAnalyzer(cst.CSTVisitor):
         self.read_columns: set[str] = set()
         self.written_columns: set[str] = set()
         self.conditional_columns: set[str] = set()
+
+    def __eq__(self, other):
+        return (
+            self.column_references == other.column_references
+            and self.detected_columns == other.detected_columns
+            and self.operation_contexts == other.operation_contexts
+            and self.dataframe_vars == other.dataframe_vars
+            and self.read_columns == other.read_columns
+            and self.written_columns == other.written_columns
+            and self.conditional_columns == other.conditional_columns
+        )
 
     def visit_Call(self, node: cst.Call) -> None:
         """Visit function calls to detect column operations."""
@@ -297,6 +306,5 @@ def find_column_references(source_code: str) -> dict[str, Any]:
     """
     tree = cst.parse_module(source_code)
     analyzer = ColumnAnalyzer()
-    # import pdb; pdb.set_trace()
     tree.visit(analyzer)
     return analyzer.get_analysis_summary()

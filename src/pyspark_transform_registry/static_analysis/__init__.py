@@ -13,14 +13,7 @@ from .schema_inference import (
     generate_constraint,
     generate_constraint_from_function,
 )
-from .type_inference import (
-    TypeInferenceEngine,
-    analyze_complex_expression,
-    analyze_expression,
-    analyze_spark_function,
-    infer_expression_type,
-    infer_spark_function_type,
-)
+from .type_inference import TypeInferenceEngine, infer_expression_type
 
 __all__ = [
     # Main analysis function
@@ -34,10 +27,6 @@ __all__ = [
     "find_column_references",
     "find_dataframe_operations",
     "infer_expression_type",
-    "analyze_spark_function",
-    "analyze_complex_expression",
-    "analyze_expression",
-    "infer_spark_function_type",
     "generate_constraint_from_function",
     "generate_constraint",
 ]

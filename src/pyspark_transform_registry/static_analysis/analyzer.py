@@ -27,7 +27,6 @@ def analyze_function(func: Callable) -> PartialSchemaConstraint:
     Returns:
         PartialSchemaConstraint with inferred requirements and transformations
     """
-    # try:
     # Extract function source code
     source = inspect.getsource(func)
 
@@ -60,14 +59,6 @@ def analyze_function(func: Callable) -> PartialSchemaConstraint:
     )
 
     return constraint
-
-    # except Exception as e:
-    #     # Fallback for any unexpected errors
-    #     constraint = PartialSchemaConstraint(
-    #         analysis_method="static_analysis",
-    #     )
-    #     constraint.add_warning(f"Analysis failed: {e}")
-    #     return constraint
 
 
 class AnalysisWrapper(cst.CSTVisitor):
@@ -107,11 +98,11 @@ class AnalysisWrapper(cst.CSTVisitor):
 
     def visit_Attribute(self, node: cst.Attribute) -> None:
         """Visit attribute access - mainly for df.column patterns."""
-        self.column_analyzer.visit_attribute(node)
+        self.column_analyzer.visit_Attribute(node)
 
     def visit_Subscript(self, node: cst.Subscript) -> None:
         """Visit subscript access - for df["column"] patterns."""
-        self.column_analyzer.visit_subscript(node)
+        self.column_analyzer.visit_Subscript(node)
 
     def visit_For(self, node: cst.For) -> None:
         """Visit for loops - may indicate dynamic operations."""

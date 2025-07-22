@@ -5,9 +5,10 @@ This module analyzes PySpark expressions to infer the types of columns
 and transformations, helping to build accurate schema constraints.
 """
 
-import libcst as cst
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
+
+import libcst as cst
 
 
 @dataclass
@@ -420,129 +421,3 @@ def infer_expression_type(expression_code: str) -> str | None:
         return inferred
     except Exception:
         return None
-
-
-def analyze_spark_function(expression: str) -> dict[str, Any]:
-    """
-    Analyze a PySpark function call (test-compatible interface).
-
-    Args:
-        expression: Function expression to analyze
-
-    Returns:
-        Dictionary with analysis results
-    """
-    if "current_timestamp" in expression:
-        return {
-            "function": "current_timestamp",
-            "return_type": "timestamp",
-            "nullable": False,
-        }
-    elif "when" in expression and "otherwise" in expression:
-        return {
-            "function": "when",
-            "return_type": "string",  # Depends on branches
-            "nullable": True,
-            "branches": ["premium", "standard"],
-        }
-    elif any(op in expression for op in ["+", "-", "*", "/"]):
-        return {
-            "function": "arithmetic",
-            "return_type": "double",
-            "nullable": True,
-            "operation": "mathematical",
-        }
-    else:
-        return {
-            "function": "unknown",
-            "return_type": "string",
-            "nullable": True,
-        }
-
-
-def analyze_complex_expression(expression: str) -> dict[str, Any]:
-    """
-    Analyze complex expressions (test-compatible interface).
-
-    Args:
-        expression: Expression to analyze
-
-    Returns:
-        Dictionary with analysis results
-    """
-    if "F.when" in expression:
-        return {
-            "type": "conditional",
-            "complexity": "high",
-            "referenced_columns": ["category", "amount"],
-            "result_type": "boolean",
-        }
-    elif "(" in expression and ")" in expression:
-        return {
-            "type": "nested_function",
-            "complexity": "medium",
-            "functions": ["lower", "trim"],
-            "result_type": "string",
-        }
-    else:
-        return {
-            "type": "simple",
-            "complexity": "low",
-            "result_type": "string",
-        }
-
-
-def analyze_expression(expression: str) -> dict[str, Any]:
-    """
-    Analyze expressions (test-compatible interface).
-
-    Args:
-        expression: Expression to analyze
-
-    Returns:
-        Dictionary with analysis results
-    """
-    if "*" in expression and "1.5" in expression:
-        return {
-            "operation": "multiplication",
-            "return_type": "double",
-            "nullable": True,
-            "referenced_columns": ["amount"],
-        }
-    elif any(op in expression for op in ["+", "-", "*", "/"]):
-        return {
-            "operation": "arithmetic",
-            "return_type": "double",
-            "nullable": True,
-            "referenced_columns": [],
-        }
-    else:
-        return {
-            "operation": "unknown",
-            "return_type": "string",
-            "nullable": True,
-            "referenced_columns": [],
-        }
-
-
-def infer_spark_function_type(function_call: str) -> str:
-    """
-    Infer type from Spark function calls (test-compatible interface).
-
-    Args:
-        function_call: Spark function call to analyze
-
-    Returns:
-        Inferred type string
-    """
-    type_mappings = {
-        "F.current_timestamp()": "timestamp",
-        "F.current_date()": "date",
-        "F.lit(42)": "integer",
-        "F.lit('hello')": "string",
-        "F.lit(True)": "boolean",
-        "F.sum(df.amount)": "double",
-        "F.count(df.id)": "integer",
-    }
-
-    return type_mappings.get(function_call, "string")

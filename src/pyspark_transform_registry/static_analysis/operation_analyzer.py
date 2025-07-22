@@ -20,7 +20,6 @@ class DataFrameOperation:
     )
     method_name: str
     args: list[str]  # String representations of arguments
-    line_number: int | None = None
 
     def affects_schema(self) -> bool:
         """Check if this operation affects the DataFrame schema."""
@@ -49,6 +48,16 @@ class DataFrameOperation:
             "agg",
         }
         return self.method_name in row_affecting
+
+    def __eq__(self, other):
+        return (
+            self.operation_type == other.operation_type
+            and self.method_name == other.method_name
+            and self.args == other.args
+        )
+
+    def __hash__(self):
+        return hash((self.operation_type, self.method_name, tuple(self.args)))
 
 
 class OperationAnalyzer(cst.CSTVisitor):
@@ -82,38 +91,27 @@ class OperationAnalyzer(cst.CSTVisitor):
         self.method_chain_depth = 0
         self.max_chain_depth = 0
 
-    def visit_call(self, node: cst.Call) -> None:
+    def visit_Call(self, node: cst.Call) -> None:
         """Visit function calls to detect DataFrame operations."""
-        try:
-            # Check if this is a DataFrame method call
-            operation = self._analyze_dataframe_operation(node)
-            if operation:
-                self.operations.append(operation)
-                self._categorize_operation(operation)
+        # Check if this is a DataFrame method call
+        operation = self._analyze_dataframe_operation(node)
+        if operation and operation not in self.operations:
+            self.operations.append(operation)
+            self._categorize_operation(operation)
 
-            # Check for UDF usage
-            if self._is_udf_call(node):
-                self.has_udfs = True
+        # Check for UDF usage
+        if self._is_udf_call(node):
+            self.has_udfs = True
 
-        except Exception:
-            # Ignore parsing errors for individual calls
-            pass
-
-    def visit_attribute(self, node: cst.Attribute) -> None:
+    def visit_Attribute(self, node: cst.Attribute) -> None:
         """Visit attribute access to track method chaining."""
-        try:
-            if (
-                isinstance(node.value, cst.Name)
-                and node.value.value in self.dataframe_vars
-            ):
-                # This is a DataFrame method access
-                self.method_chain_depth += 1
-                self.max_chain_depth = max(
-                    self.max_chain_depth,
-                    self.method_chain_depth,
-                )
-        except Exception:
-            pass
+        if isinstance(node.value, cst.Name) and node.value.value in self.dataframe_vars:
+            # This is a DataFrame method access
+            self.method_chain_depth += 1
+            self.max_chain_depth = max(
+                self.max_chain_depth,
+                self.method_chain_depth,
+            )
 
     def _analyze_dataframe_operation(
         self,
@@ -132,17 +130,14 @@ class OperationAnalyzer(cst.CSTVisitor):
         # Extract arguments
         args = []
         for arg in node.args:
-            try:
-                if isinstance(arg.value, cst.SimpleString):
-                    args.append(arg.value.value.strip("'\""))
-                elif isinstance(arg.value, cst.Name):
-                    args.append(arg.value.value)
-                elif isinstance(arg.value, cst.Attribute):
-                    args.append(f"{self._get_attribute_chain(arg.value)}")
-                else:
-                    args.append("<expression>")
-            except Exception:
-                args.append("<unknown>")
+            if isinstance(arg.value, cst.SimpleString):
+                args.append(arg.value.value.strip("'\""))
+            elif isinstance(arg.value, cst.Name):
+                args.append(arg.value.value)
+            elif isinstance(arg.value, cst.Attribute):
+                args.append(f"{self._get_attribute_chain(arg.value)}")
+            else:
+                args.append("<expression>")
 
         # Determine operation type
         operation_type = self._classify_operation_type(method_name)
@@ -275,8 +270,8 @@ class OperationAnalyzer(cst.CSTVisitor):
         """Get summary of DataFrame operation analysis."""
         return {
             "total_operations": len(self.operations),
-            "operation_types": list({op.operation_type for op in self.operations}),
-            "method_names": list({op.method_name for op in self.operations}),
+            "operation_types": set({op.operation_type for op in self.operations}),
+            "method_names": set({op.method_name for op in self.operations}),
             "schema_operations": len(self.schema_operations),
             "filter_operations": len(self.filter_operations),
             "aggregation_operations": len(self.aggregation_operations),

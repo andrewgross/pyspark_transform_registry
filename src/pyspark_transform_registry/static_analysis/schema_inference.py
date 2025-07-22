@@ -37,8 +37,8 @@ class ConstraintGenerator:
 
     def generate_constraint(
         self,
-        operations: list[DataFrameOperation],
-        column_references: list[ColumnReference],
+        operations: set[DataFrameOperation],
+        column_references: set[ColumnReference],
         type_info: dict[str, Any],
         source_analysis: dict[str, Any],
     ) -> PartialSchemaConstraint:
@@ -107,7 +107,7 @@ class ConstraintGenerator:
 
     def _analyze_operations(
         self,
-        operations: list[DataFrameOperation],
+        operations: set[DataFrameOperation],
     ) -> dict[str, Any]:
         """Analyze operations to understand their impact."""
         analysis = {
@@ -194,10 +194,10 @@ class ConstraintGenerator:
 
     def _generate_transformations(
         self,
-        operations: list[DataFrameOperation],
+        operations: set[DataFrameOperation],
         written_columns: set[str],
         type_info: dict[str, Any],
-        operation_analysis: dict[str, DataFrameOperation],
+        operation_analysis: dict[str, list[DataFrameOperation]],
     ) -> dict[str, list]:
         """Generate column transformation constraints."""
         transformations = {

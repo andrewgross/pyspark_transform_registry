@@ -110,6 +110,18 @@ class PartialSchemaConstraint:
     analysis_method: str = "static_analysis"  # "static_analysis", "manual", "hybrid"
     warnings: list[str] = field(default_factory=list)
 
+    def __eq__(self, other):
+        return (
+            self.required_columns == other.required_columns
+            and self.optional_columns == other.optional_columns
+            and self.added_columns == other.added_columns
+            and self.modified_columns == other.modified_columns
+            and self.removed_columns == other.removed_columns
+            and self.preserves_other_columns == other.preserves_other_columns
+            and self.analysis_method == other.analysis_method
+            and self.warnings == other.warnings
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
