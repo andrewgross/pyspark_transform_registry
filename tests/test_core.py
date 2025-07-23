@@ -23,14 +23,14 @@ class TestDirectRegistration:
             return df.select("*")
 
         # Register function
-        model_uri = register_function(
+        logged_model = register_function(
             func=simple_transform,
             name="test.simple.transform",
             description="A simple transform function",
         )
-
-        assert model_uri is not None
-        assert "models:/test.simple.transform" in model_uri
+        assert logged_model is not None
+        assert logged_model.name == "simple_transform"
+        assert logged_model.registered_model_version == 1
 
     def test_register_function_with_parameters(self, spark, mlflow_tracking):
         """Test registering a function with parameters."""
@@ -38,14 +38,17 @@ class TestDirectRegistration:
         def filter_transform(df: DataFrame, min_value: int = 0) -> DataFrame:
             return df.filter(col("value") > min_value)
 
-        model_uri = register_function(
+        logged_model = register_function(
             func=filter_transform,
             name="test.filter.transform",
             extra_pip_requirements=["pandas>=1.0.0"],
             tags={"category": "filter", "author": "test"},
         )
 
-        assert model_uri is not None
+        assert logged_model is not None
+        assert logged_model.name == "filter_transform"
+        assert logged_model.tags["category"] == "filter"
+        assert logged_model.tags["author"] == "test"
 
     def test_register_function_missing_args(self):
         """Test that registration fails with missing arguments."""
@@ -80,14 +83,15 @@ class TestFileBasedRegistration:
         """Test registering a function from a file."""
 
         # Register function from fixture file
-        model_uri = register_function(
+        logged_model = register_function(
             file_path="tests/fixtures/simple_transform.py",
             function_name="simple_filter",
             name="test.file.simple_filter",
         )
 
-        assert model_uri is not None
-        assert "models:/test.file.simple_filter" in model_uri
+        assert logged_model is not None
+        assert logged_model.name == "simple_filter"
+        assert logged_model.registered_model_version == 1
 
     def test_register_from_file_missing_function_name(self):
         """Test that file-based registration fails without function name."""

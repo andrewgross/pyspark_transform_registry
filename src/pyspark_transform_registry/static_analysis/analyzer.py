@@ -141,8 +141,9 @@ class PySparkTransformAnalyzer(ast.NodeVisitor):
             # Let the DataFrame tracker analyze function parameters
             self.df_tracker.analyze_function_def(node)
 
-            # Let the type engine analyze parameter type annotations
-            self.type_engine.analyze_function_def(node)
+        # Let the type engine analyze ALL function definitions for UDF detection
+        # This includes nested UDFs defined inside the main transform function
+        self.type_engine.analyze_function_def(node)
 
         # Continue visiting child nodes
         self.generic_visit(node)

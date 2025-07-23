@@ -30,14 +30,16 @@ class TestEndToEndWorkflow:
         )
 
         # Register function
-        model_uri = register_function(
+        logged_model = register_function(
             func=business_logic,
             name="business.finance.amount_processor",
             description="Process amounts above threshold",
             tags={"department": "finance", "owner": "data_team"},
         )
 
-        assert model_uri is not None
+        assert logged_model is not None
+        assert logged_model.name == "business_logic"
+        assert logged_model.registered_model_version == 1
 
         # Load function
         loaded_transform = load_function("business.finance.amount_processor", version=1)
@@ -60,7 +62,7 @@ class TestEndToEndWorkflow:
         test_data = spark.createDataFrame([(1, 10), (2, 20), (3, 30)], ["id", "value"])
 
         # Register function from file
-        model_uri = register_function(
+        logged_model = register_function(
             file_path="tests/fixtures/simple_transform.py",
             function_name="simple_filter",
             name="etl.data.simple_filter",
@@ -68,7 +70,9 @@ class TestEndToEndWorkflow:
             extra_pip_requirements=["pyspark>=3.0.0"],
         )
 
-        assert model_uri is not None
+        assert logged_model is not None
+        assert logged_model.name == "simple_filter"
+        assert logged_model.registered_model_version == 1
 
         # Load function
         loaded_transform = load_function("etl.data.simple_filter", version=1)

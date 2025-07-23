@@ -477,7 +477,35 @@ class ASTColumnAnalyzer:
 
     def _analyze_agg_call(self, node: ast.Call) -> None:
         """Analyze df.agg() calls."""
+        df_var = self.df_tracker._get_dataframe_var_from_call(node)
+
         for arg in node.args:
+            # Check for aggregation functions with alias: F.sum(col).alias("name")
+            alias_name = None
+            agg_column = None
+
+            # Handle aliased aggregations: F.sum(value_col).alias("total_value")
+            if isinstance(arg, ast.Call) and isinstance(arg.func, ast.Attribute):
+                if arg.func.attr == "alias" and len(arg.args) >= 1:
+                    # Extract alias name
+                    alias_name = self._extract_string_literal(arg.args[0])
+                    # The aggregation function is the value being aliased
+                    if isinstance(arg.func.value, ast.Call):
+                        agg_func = arg.func.value
+                        # Analyze the aggregation function arguments for column references
+                        for agg_arg in agg_func.args:
+                            col_name = self._extract_string_literal(agg_arg)
+                            if col_name:
+                                agg_column = col_name
+                                # Add column reference for the aggregated column
+                                self._add_column_reference(
+                                    col_name,
+                                    "read",
+                                    df_var or "df",
+                                    getattr(node, "lineno", None),
+                                )
+
+            # Analyze all expressions for any additional column references
             self._analyze_expression_for_columns(arg)
 
     def _analyze_pyspark_function_call(self, node: ast.Call) -> None:
@@ -718,6 +746,12 @@ class ASTOperationAnalyzer:
                     except (ValueError, TypeError):
                         expression = "<expression>"  # Fallback if unparsing fails
 
+                # For agg operations, extract aliased column names as arguments
+                elif method_name == "agg":
+                    aliased_columns = self._extract_agg_aliases(node.args)
+                    if aliased_columns:
+                        arguments.extend(aliased_columns)
+
                 self.operation_sequence += 1
                 operation = DataFrameOperation(
                     method_name=method_name,
@@ -788,6 +822,29 @@ class ASTOperationAnalyzer:
 
         return arguments
 
+    def _extract_agg_aliases(self, args: list[ast.AST]) -> list[str]:
+        """Extract alias names from aggregation arguments."""
+        aliases = []
+
+        for arg in args:
+            # Look for F.sum(col).alias("name") pattern
+            if isinstance(arg, ast.Call) and isinstance(arg.func, ast.Attribute):
+                if arg.func.attr == "alias" and len(arg.args) >= 1:
+                    # Extract the alias name
+                    alias_name = self._extract_string_literal(arg.args[0])
+                    if alias_name:
+                        aliases.append(alias_name)
+
+        return aliases
+
+    def _extract_string_literal(self, node: ast.AST) -> str | None:
+        """Extract string value from AST node."""
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        elif isinstance(node, ast.Str):  # Python < 3.8 compatibility
+            return node.s
+        return None
+
     def get_operations(self) -> list[DataFrameOperation]:
         """Get all detected operations."""
         return self.operations.copy()
@@ -833,9 +890,29 @@ class ASTTypeInferenceEngine:
         self.type_hints = type_hints
         self.type_mappings: dict[str, dict[str, Any]] = {}
         self.pyspark_function_types = self._load_pyspark_function_types()
+        self.udf_return_types: dict[str, str] = {}  # Track UDF return types
 
     def analyze_function_def(self, node: ast.FunctionDef) -> None:
         """Analyze function definition for type information."""
+        # Check for UDF decorators
+        for decorator in node.decorator_list:
+            if isinstance(decorator, ast.Call):
+                # Check for @F.udf("type") pattern
+                if isinstance(decorator.func, ast.Attribute):
+                    if (
+                        isinstance(decorator.func.value, ast.Name)
+                        and decorator.func.value.id == "F"
+                        and decorator.func.attr == "udf"
+                        and len(decorator.args) >= 1
+                    ):
+                        # Extract the UDF return type from the decorator argument
+                        if isinstance(decorator.args[0], ast.Constant) and isinstance(
+                            decorator.args[0].value,
+                            str,
+                        ):
+                            udf_return_type = decorator.args[0].value
+                            self.udf_return_types[node.name] = udf_return_type
+
         # Extract return type annotation
         if node.returns:
             return_type = ast.unparse(node.returns)
@@ -872,6 +949,17 @@ class ASTTypeInferenceEngine:
             func_name = node.func.id
 
         if func_name:
+            # First check if this is a UDF call
+            if func_name in self.udf_return_types:
+                udf_return_type = self.udf_return_types[func_name]
+                expr_str = ast.unparse(node)
+                self.type_mappings[expr_str] = {
+                    "type": udf_return_type,
+                    "source": "udf",
+                }
+                return
+
+            # Otherwise, check for PySpark function types
             return_type = self._get_pyspark_function_return_type(
                 func_name,
                 node.args,

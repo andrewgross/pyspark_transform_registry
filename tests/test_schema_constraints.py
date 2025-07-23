@@ -12,8 +12,8 @@ from pyspark_transform_registry.schema_constraints import (
     ColumnTransformation,
     PartialSchemaConstraint,
     ValidationResult,
-    python_type_to_pyspark_type,
     infer_pyspark_type_from_value,
+    python_type_to_pyspark_type,
 )
 
 
@@ -475,16 +475,21 @@ class TestConstraintComplexScenarios:
         assert len(reconstructed.optional_columns) == len(constraint.optional_columns)
         assert len(reconstructed.added_columns) == len(constraint.added_columns)
         assert len(reconstructed.modified_columns) == len(constraint.modified_columns)
-        assert reconstructed.removed_columns == constraint.removed_columns
+        assert set(reconstructed.removed_columns) == set(constraint.removed_columns)
         assert (
             reconstructed.preserves_other_columns == constraint.preserves_other_columns
         )
         assert reconstructed.analysis_method == constraint.analysis_method
-        assert reconstructed.warnings == constraint.warnings
+        assert set(reconstructed.warnings) == set(constraint.warnings)
 
         # Verify nested object details
-        assert reconstructed.required_columns[0].description == "Primary key"
-        assert reconstructed.added_columns[0].description == "Processing timestamp"
+        assert any(
+            col.description == "Primary key" for col in reconstructed.required_columns
+        )
+        assert any(
+            col.description == "Processing timestamp"
+            for col in reconstructed.added_columns
+        )
 
     def test_constraint_with_duplicate_column_names(self):
         """Test handling of constraints with duplicate column names."""

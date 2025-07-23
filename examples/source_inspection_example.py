@@ -10,11 +10,12 @@ This example shows how to:
 """
 
 import tempfile
+
 import mlflow
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, lit, when
 
-from pyspark_transform_registry import register_function, load_function
+from pyspark_transform_registry import load_function, register_function
 
 
 def create_spark_session():
@@ -199,4 +200,6 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+    main()
     main()

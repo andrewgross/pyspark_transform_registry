@@ -22,7 +22,7 @@ def clean_data(df: DataFrame) -> DataFrame:
     return df.filter(col("amount") > 0).withColumn("status", lit("clean"))
 
 # Register the function
-model_uri = register_function(
+logged_model = register_function(
     func=clean_data,
     name="analytics.etl.clean_data",
     description="Data cleaning transformation"

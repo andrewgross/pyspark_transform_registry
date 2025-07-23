@@ -12,8 +12,8 @@ from collections.abc import Callable
 from typing import Any
 
 import mlflow
-import mlflow.models
 import mlflow.pyfunc
+from mlflow.models.model import ModelInfo
 from pyspark.sql import DataFrame
 
 from .model_wrapper import PySparkTransformModel
@@ -36,7 +36,7 @@ def register_function(
     tags: dict[str, Any] | None = None,
     infer_schema: bool = True,
     schema_constraint: PartialSchemaConstraint | None = None,
-) -> str:
+) -> ModelInfo:
     """
     Register a PySpark transform function in MLflow's model registry.
 
@@ -126,7 +126,8 @@ def register_function(
         log_params["tags"]["description"] = description
 
     # Add function metadata
-    log_params["tags"]["function_name"] = func.__name__
+    _func_name = function_name if function_name else func.__name__
+    log_params["tags"]["function_name"] = _func_name
     if func.__doc__:
         log_params["tags"]["docstring"] = func.__doc__
 
@@ -163,7 +164,7 @@ def register_function(
                     mlflow.set_tag(tag_key, tag_value)
 
                 # Use the registered model name for MLflow 3.0+
-                mlflow.pyfunc.log_model(name=name, **log_params)
+                logged_model = mlflow.pyfunc.log_model(name=_func_name, **log_params)
         else:
             # Start a new run
             with mlflow.start_run():
@@ -172,7 +173,7 @@ def register_function(
                     mlflow.set_tag(tag_key, tag_value)
 
                 # Use the registered model name for MLflow 3.0+
-                mlflow.pyfunc.log_model(name=name, **log_params)
+                logged_model = mlflow.pyfunc.log_model(name=_func_name, **log_params)
     except Exception:
         # Fallback: try with nested=True
         with mlflow.start_run(nested=True):
@@ -181,11 +182,9 @@ def register_function(
                 mlflow.set_tag(tag_key, tag_value)
 
             # Use a simple artifact name but register with the full name
-            _name = func.__name__ if func else function_name
-            mlflow.pyfunc.log_model(name=_name, **log_params)
+            logged_model = mlflow.pyfunc.log_model(name=_func_name, **log_params)
 
-    # Return the model URI string
-    return f"models:/{name}/1"
+    return logged_model
 
 
 def load_function(
