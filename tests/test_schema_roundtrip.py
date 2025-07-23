@@ -42,7 +42,7 @@ class TestSchemaRoundTrip:
         loaded_func = load_function("test.roundtrip.clean_data", version=1)
 
         # Step 4: Analyze loaded function to get actual schema
-        loaded_constraint = analyze_function(loaded_func)
+        loaded_constraint = analyze_function(loaded_func.get_original_function())
 
         # Step 5: Verify schema consistency
         assert len(original_constraint.required_columns) == len(
@@ -99,7 +99,7 @@ class TestSchemaRoundTrip:
         loaded_func = load_function("test.roundtrip.process_orders", version=1)
 
         # Step 4: Analyze loaded function
-        loaded_constraint = analyze_function(loaded_func)
+        loaded_constraint = analyze_function(loaded_func.get_original_function())
 
         # Step 5: Verify schema preservation
         assert (
@@ -156,7 +156,7 @@ class TestSchemaRoundTrip:
         loaded_func = load_function("test.roundtrip.filter_by_category", version=1)
 
         # Step 4: Analyze loaded function
-        loaded_constraint = analyze_function(loaded_func)
+        loaded_constraint = analyze_function(loaded_func.get_original_function())
 
         # Verify column requirements
         original_columns = {col.name for col in original_constraint.required_columns}
