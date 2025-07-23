@@ -303,6 +303,7 @@ class ConstraintGenerator:
                         ):
                             col_type = expr_type_info["type"]
                             # PySpark functions like current_date(), current_timestamp() are never null
+                            # UDFs with specific return types should have appropriate nullability
                             if any(
                                 func in op.expression
                                 for func in [
@@ -312,6 +313,9 @@ class ConstraintGenerator:
                                 ]
                             ):
                                 nullable = False
+                            elif expr_type_info.get("source") == "udf":
+                                # UDF return types - generally nullable but depends on UDF implementation
+                                nullable = True  # Keep default for UDFs
                             found_type = True
 
                 # Fallback: Look for pattern matches if no exact expression match found

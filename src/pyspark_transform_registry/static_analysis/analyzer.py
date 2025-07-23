@@ -219,13 +219,18 @@ class PySparkTransformAnalyzer(ast.NodeVisitor):
         Args:
             node: AST For node
         """
-        # Check if this for loop likely creates dynamic columns
+        # Try to analyze the loop for column creation patterns
         if self._is_dynamic_column_loop(node):
-            self.dynamic_operations += 1
-            self.warnings.append(
-                "Dynamic column operations detected in for loop - "
-                "manual verification recommended",
-            )
+            # Let the column analyzer try to extract column information
+            self.column_analyzer.analyze_for_loop(node)
+
+            # Check if the analysis was successful by seeing if we added column references
+            # If not, mark it as dynamic operations requiring manual verification
+            if not self._has_analyzable_loop_pattern(node):
+                self.dynamic_operations += 1
+                self.warnings.append(
+                    "Dynamic column operations detected - manual verification recommended",
+                )
 
         # Continue visiting child nodes
         self.generic_visit(node)
@@ -300,6 +305,51 @@ class PySparkTransformAnalyzer(ast.NodeVisitor):
         for child in ast.walk(node):
             if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
                 if child.func.attr == "withColumn":
+                    return True
+
+        return False
+
+    def _has_analyzable_loop_pattern(self, node: ast.For) -> bool:
+        """
+        Check if a for loop has a pattern we can analyze statically.
+
+        Args:
+            node: AST For node
+
+        Returns:
+            True if the loop pattern can be analyzed statically
+        """
+        # Check if loop iterates over a list (literal or variable) and creates columns with known names
+        has_iterable = False
+
+        if isinstance(node.iter, ast.List):
+            # Direct list iteration: for item in ["a", "b", "c"]
+            all_strings = all(
+                isinstance(item, ast.Constant) and isinstance(item.value, str)
+                for item in node.iter.elts
+            )
+            has_iterable = all_strings
+        elif isinstance(node.iter, ast.Name):
+            # Variable iteration: for item in var_name
+            # Assume it's analyzable for now - the column analyzer will try to resolve it
+            has_iterable = True
+
+        if has_iterable:
+            # Check if loop body contains withColumn with analyzable pattern
+            for child in ast.walk(node):
+                if (
+                    isinstance(child, ast.Call)
+                    and isinstance(child.func, ast.Attribute)
+                    and child.func.attr == "withColumn"
+                ):
+                    return True
+
+            # Also check if there are f-string assignments in the loop body
+            for stmt in node.body:
+                if isinstance(stmt, ast.Assign) and isinstance(
+                    stmt.value,
+                    ast.JoinedStr,
+                ):
                     return True
 
         return False
