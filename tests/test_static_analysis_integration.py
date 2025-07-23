@@ -51,4 +51,4 @@ class TestStaticAnalysisIntegration:
     def test_analysis_produces_reasonable_constraints(self, func, expected):
         """Test that analysis produces constraints that are reasonable compared to expected."""
         constraint = analyze_function(func)
-        assert constraint == expected
+        assert constraint.to_dict() == expected.to_dict()

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class ColumnRequirement:
     """
     Represents a requirement for a specific column in a DataFrame.
@@ -49,7 +49,7 @@ class ColumnRequirement:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class ColumnTransformation:
     """
     Represents a transformation applied to a column by a transform function.
@@ -129,14 +129,20 @@ class PartialSchemaConstraint:
         """Convert to dictionary for serialization."""
         return {
             "schema_version": self.schema_version,
-            "required_columns": [col.to_dict() for col in self.required_columns],
-            "optional_columns": [col.to_dict() for col in self.optional_columns],
-            "added_columns": [col.to_dict() for col in self.added_columns],
-            "modified_columns": [col.to_dict() for col in self.modified_columns],
-            "removed_columns": self.removed_columns,
+            "required_columns": [
+                col.to_dict() for col in sorted(self.required_columns)
+            ],
+            "optional_columns": [
+                col.to_dict() for col in sorted(self.optional_columns)
+            ],
+            "added_columns": [col.to_dict() for col in sorted(self.added_columns)],
+            "modified_columns": [
+                col.to_dict() for col in sorted(self.modified_columns)
+            ],
+            "removed_columns": sorted(self.removed_columns),
             "preserves_other_columns": self.preserves_other_columns,
             "analysis_method": self.analysis_method,
-            "warnings": self.warnings,
+            "warnings": sorted(self.warnings),
         }
 
     @classmethod
