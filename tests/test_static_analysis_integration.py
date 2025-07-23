@@ -9,19 +9,10 @@ import pytest
 
 from pyspark_transform_registry.schema_constraints import PartialSchemaConstraint
 from pyspark_transform_registry.static_analysis import analyze_function
-from tests.test_data.schema_constraint_examples import (
-    EXPECTED_ADD_TIMESTAMP,
-    EXPECTED_CALCULATE_METRICS,
-    EXPECTED_CLEAN_TEXT_DATA,
-    EXPECTED_CUSTOMER_ANALYTICS,
-    EXPECTED_FILTER_ACTIVE,
-    EXPECTED_NORMALIZE_AMOUNTS,
-    add_timestamp,
-    calculate_metrics,
-    clean_text_data,
-    customer_analytics,
-    filter_active,
-    normalize_amounts,
+from tests.fixtures.schema_constraint_examples import (
+    ALL_TRANSFORM_EXAMPLES,
+    add_timestamp_f,
+    normalize_amounts_f,
 )
 
 
@@ -30,7 +21,7 @@ class TestStaticAnalysisIntegration:
 
     def test_analysis_produces_serializable_constraints(self):
         """Test that analysis produces constraints that can be serialized."""
-        constraint = analyze_function(add_timestamp)
+        constraint = analyze_function(add_timestamp_f)
 
         # Should be able to serialize to JSON
         json_str = constraint.to_json()
@@ -44,8 +35,8 @@ class TestStaticAnalysisIntegration:
 
     def test_constraint_merging_works(self):
         """Test that constraints from different functions can be merged."""
-        constraint1 = analyze_function(add_timestamp)
-        constraint2 = analyze_function(normalize_amounts)
+        constraint1 = analyze_function(add_timestamp_f)
+        constraint2 = analyze_function(normalize_amounts_f)
 
         # Should be able to merge constraints
         merged = constraint1.merge_with(constraint2)
@@ -55,14 +46,7 @@ class TestStaticAnalysisIntegration:
 
     @pytest.mark.parametrize(
         "func,expected",
-        [
-            (add_timestamp, EXPECTED_ADD_TIMESTAMP),
-            (normalize_amounts, EXPECTED_NORMALIZE_AMOUNTS),
-            (filter_active, EXPECTED_FILTER_ACTIVE),
-            (customer_analytics, EXPECTED_CUSTOMER_ANALYTICS),
-            (clean_text_data, EXPECTED_CLEAN_TEXT_DATA),
-            (calculate_metrics, EXPECTED_CALCULATE_METRICS),
-        ],
+        ALL_TRANSFORM_EXAMPLES,
     )
     def test_analysis_produces_reasonable_constraints(self, func, expected):
         """Test that analysis produces constraints that are reasonable compared to expected."""

@@ -1,155 +1,359 @@
 """
-Main static analysis orchestrator.
+AST-based static analysis orchestrator for PySpark transform functions.
 
-This module coordinates all the analysis components to generate complete
-schema constraints from PySpark transform function source code.
+This module coordinates all analysis components to generate complete
+schema constraints from PySpark transform function source code using
+Python's built-in AST module for robust static analysis.
 """
 
+import ast
 import inspect
+import textwrap
 from collections.abc import Callable
-
-import libcst as cst
+from typing import Any, get_type_hints
 
 from ..schema_constraints import PartialSchemaConstraint
-from .column_analyzer import ColumnAnalyzer
-from .operation_analyzer import OperationAnalyzer
+from .ast_analyzers import (
+    ASTColumnAnalyzer,
+    ASTOperationAnalyzer,
+    ASTTypeInferenceEngine,
+    DataFrameVariableTracker,
+)
 from .schema_inference import ConstraintGenerator
-from .type_inference import TypeInferenceEngine
 
 
 def analyze_function(func: Callable) -> PartialSchemaConstraint:
     """
     Analyze a PySpark transform function to generate schema constraints.
 
+    This function uses Python's AST module to parse and analyze the function
+    source code, providing robust DataFrame variable detection and type inference.
+
     Args:
         func: The function to analyze
 
     Returns:
         PartialSchemaConstraint with inferred requirements and transformations
+
+    Raises:
+        ValueError: If function source cannot be parsed
+        TypeError: If function doesn't appear to be a DataFrame transform
     """
     # Extract function source code
-    source = inspect.getsource(func)
-
-    # Parse with LibCST
     try:
-        tree = cst.parse_module(source)
-    except Exception as e:
-        # If we can't parse the source, return empty constraint
-        constraint = PartialSchemaConstraint(
-            analysis_method="static_analysis",
-        )
-        constraint.add_warning(f"Could not parse function source: {e}")
-        return constraint
+        source = inspect.getsource(func)
+    except (OSError, TypeError) as e:
+        raise ValueError(f"Could not extract function source: {e}")
 
-    # Initialize analyzers
-    column_analyzer = ColumnAnalyzer()
-    operation_analyzer = OperationAnalyzer()
-    type_engine = TypeInferenceEngine()
+    # Parse with Python's AST module
+    try:
+        # Dedent the source code to handle functions defined inside other contexts
+        dedented_source = textwrap.dedent(source)
+        tree = ast.parse(dedented_source)
+    except SyntaxError as e:
+        raise ValueError(f"Could not parse function source - syntax error: {e}")
+
+    # Get function type hints for DataFrame parameter detection
+    try:
+        type_hints = get_type_hints(func)
+    except (AttributeError, NameError, TypeError):
+        # Type hints may not be available or may reference undefined types
+        type_hints = {}
+
+    # Get function signature for parameter analysis
+    try:
+        signature = inspect.signature(func)
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"Could not extract function signature: {e}")
+
+    # Initialize the main analyzer
+    analyzer = PySparkTransformAnalyzer(func, type_hints, signature)
+
+    # Visit the AST tree to collect analysis data
+    analyzer.visit(tree)
+
+    # Generate final constraint from analysis results
     constraint_generator = ConstraintGenerator()
-
-    # Visit the tree with our analyzers
-    wrapper = AnalysisWrapper(column_analyzer, operation_analyzer, type_engine)
-    tree.visit(wrapper)
-    # Generate final constraint
     constraint = constraint_generator.generate_constraint(
-        operations=operation_analyzer.operations,
-        column_references=column_analyzer.column_references,
-        type_info=type_engine.type_mappings,
-        source_analysis=wrapper.get_analysis_summary(),
+        operations=analyzer.operation_analyzer.get_operations(),
+        column_references=analyzer.column_analyzer.get_column_references(),
+        type_info=analyzer.type_engine.get_type_mappings(),
+        source_analysis=analyzer.get_analysis_summary(),
     )
 
     return constraint
 
 
-class AnalysisWrapper(cst.CSTVisitor):
+class PySparkTransformAnalyzer(ast.NodeVisitor):
     """
-    LibCST visitor that coordinates multiple analysis components.
+    Main AST visitor that orchestrates analysis of PySpark transform functions.
 
-    This wrapper visits the CST and delegates to specific analyzers
-    while tracking overall analysis quality.
+    This analyzer coordinates multiple specialized analyzers:
+    - DataFrameVariableTracker: Detects DataFrame parameters and variables
+    - ASTColumnAnalyzer: Analyzes column references and operations
+    - ASTOperationAnalyzer: Detects DataFrame method calls and transformations
+    - ASTTypeInferenceEngine: Infers types of expressions and columns
     """
 
     def __init__(
         self,
-        column_analyzer: ColumnAnalyzer,
-        operation_analyzer: OperationAnalyzer,
-        type_engine: TypeInferenceEngine,
+        func: Callable,
+        type_hints: dict[str, Any],
+        signature: inspect.Signature,
     ):
-        self.column_analyzer = column_analyzer
-        self.operation_analyzer = operation_analyzer
-        self.type_engine = type_engine
+        """
+        Initialize the analyzer with function metadata.
+
+        Args:
+            func: The function being analyzed
+            type_hints: Type hints extracted from the function
+            signature: Function signature with parameter information
+        """
+        self.func = func
+        self.func_name = func.__name__
+        self.type_hints = type_hints
+        self.signature = signature
+
+        # Initialize specialized analyzers
+        self.df_tracker = DataFrameVariableTracker(type_hints, signature)
+        self.column_analyzer = ASTColumnAnalyzer(self.df_tracker)
+        self.operation_analyzer = ASTOperationAnalyzer(self.df_tracker)
+        self.type_engine = ASTTypeInferenceEngine(self.df_tracker, type_hints)
 
         # Track analysis quality indicators
         self.udf_count = 0
         self.dynamic_operations = 0
         self.complex_expressions = 0
-        self.unparseable_expressions = 0
+        self.function_def_found = False
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
-    def visit_Call(self, node: cst.Call) -> None:
-        """Visit function calls - delegate to appropriate analyzers."""
-        # Let each analyzer process the call
-        self.column_analyzer.visit_call(node)
-        self.operation_analyzer.visit_call(node)
-        self.type_engine.visit_call(node)
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """
+        Visit function definition to analyze parameters and setup DataFrame tracking.
 
-        # Track UDF usage
-        if self._is_udf_decorator(node):
+        Args:
+            node: AST FunctionDef node
+        """
+        if node.name == self.func_name:
+            self.function_def_found = True
+
+            # Let the DataFrame tracker analyze function parameters
+            self.df_tracker.analyze_function_def(node)
+
+            # Let the type engine analyze parameter type annotations
+            self.type_engine.analyze_function_def(node)
+
+        # Continue visiting child nodes
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """
+        Visit assignments to track DataFrame variable assignments.
+
+        Args:
+            node: AST Assign node
+        """
+        # Let DataFrame tracker analyze variable assignments
+        self.df_tracker.analyze_assignment(node)
+
+        # Let column analyzer track column list assignments
+        self.column_analyzer.analyze_assignment(node)
+
+        # Let type engine infer types from assignments
+        self.type_engine.analyze_assignment(node)
+
+        # Continue visiting child nodes
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """
+        Visit function calls to detect DataFrame operations and UDF usage.
+
+        Args:
+            node: AST Call node
+        """
+        # Analyze with specialized analyzers
+        self.column_analyzer.analyze_call(node)
+        self.operation_analyzer.analyze_call(node)
+        self.type_engine.analyze_call(node)
+
+        # Check for UDF usage patterns
+        if self._is_udf_call(node):
             self.udf_count += 1
 
-    def visit_Attribute(self, node: cst.Attribute) -> None:
-        """Visit attribute access - mainly for df.column patterns."""
-        self.column_analyzer.visit_Attribute(node)
+        # Continue visiting child nodes
+        self.generic_visit(node)
 
-    def visit_Subscript(self, node: cst.Subscript) -> None:
-        """Visit subscript access - for df["column"] patterns."""
-        self.column_analyzer.visit_Subscript(node)
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        """
+        Visit attribute access for column references and method chaining.
 
-    def visit_For(self, node: cst.For) -> None:
-        """Visit for loops - may indicate dynamic operations."""
-        # Check if this looks like dynamic column operations
-        if self._is_dynamic_column_operation(node):
+        Args:
+            node: AST Attribute node
+        """
+        # Analyze column references (df.column_name patterns)
+        self.column_analyzer.analyze_attribute(node)
+
+        # Continue visiting child nodes
+        self.generic_visit(node)
+
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        """
+        Visit subscript access for bracket notation column references.
+
+        Args:
+            node: AST Subscript node
+        """
+        # Analyze column references (df["column_name"] patterns)
+        self.column_analyzer.analyze_subscript(node)
+
+        # Continue visiting child nodes
+        self.generic_visit(node)
+
+    def visit_For(self, node: ast.For) -> None:
+        """
+        Visit for loops to detect dynamic column operations.
+
+        Args:
+            node: AST For node
+        """
+        # Check if this for loop likely creates dynamic columns
+        if self._is_dynamic_column_loop(node):
             self.dynamic_operations += 1
+            self.warnings.append(
+                "Dynamic column operations detected in for loop - "
+                "manual verification recommended",
+            )
 
-    def visit_If(self, node: cst.If) -> None:
-        """Visit if statements - may indicate complex conditional logic."""
-        # Track complex conditional expressions
-        if self._is_complex_condition(node):
+        # Continue visiting child nodes
+        self.generic_visit(node)
+
+    def visit_If(self, node: ast.If) -> None:
+        """
+        Visit if statements to detect conditional logic complexity.
+
+        Args:
+            node: AST If node
+        """
+        # Check for complex conditional expressions
+        if self._is_complex_conditional(node):
             self.complex_expressions += 1
 
-    def _is_udf_decorator(self, node: cst.Call) -> bool:
-        """Check if a call represents a UDF decorator."""
-        # Look for @F.udf() patterns
-        if isinstance(node.func, cst.Attribute):
+        # Continue visiting child nodes
+        self.generic_visit(node)
+
+    def visit_With(self, node: ast.With) -> None:
+        """
+        Visit with statements (context managers).
+
+        Args:
+            node: AST With node
+        """
+        # Continue visiting child nodes
+        self.generic_visit(node)
+
+    def _is_udf_call(self, node: ast.Call) -> bool:
+        """
+        Check if a function call represents UDF usage.
+
+        Args:
+            node: AST Call node
+
+        Returns:
+            True if this appears to be a UDF-related call
+        """
+        # Check for @F.udf() decorator calls
+        if isinstance(node.func, ast.Attribute):
             if (
-                isinstance(node.func.value, cst.Name)
-                and node.func.value.value == "F"
-                and node.func.attr.value == "udf"
+                isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "F"
+                and node.func.attr == "udf"
             ):
                 return True
+
+        # Check for udf() function calls
+        if isinstance(node.func, ast.Name) and "udf" in node.func.id.lower():
+            return True
+
+        # Check for function names that suggest UDF usage
+        if isinstance(node.func, ast.Name):
+            func_name = node.func.id.lower()
+            udf_indicators = ["_udf", "udf_", "user_defined", "custom_func"]
+            if any(indicator in func_name for indicator in udf_indicators):
+                return True
+
         return False
 
-    def _is_dynamic_column_operation(self, node: cst.For) -> bool:
-        """Check if a for loop represents dynamic column operations."""
-        # This is a heuristic - look for patterns like:
-        # for col in columns: df.withColumn(f"...", ...)
+    def _is_dynamic_column_loop(self, node: ast.For) -> bool:
+        """
+        Check if a for loop appears to create columns dynamically.
 
-        # Currently assumes any for loop might be dynamic column creation
-        # This is conservative but prevents missed dynamic operations
-        # Future enhancement: analyze loop body for actual column operations
-        return True
+        Args:
+            node: AST For node
 
-    def _is_complex_condition(self, node: cst.If) -> bool:
-        """Check if an if statement has complex conditional logic."""
-        # Currently treats all conditional logic as potentially complex
-        # This ensures schema constraints reflect possible code paths
-        # Future enhancement: analyze condition complexity and simplicity patterns
-        return True
+        Returns:
+            True if loop likely creates dynamic columns
+        """
+        # Look for withColumn calls in the loop body
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
+                if child.func.attr == "withColumn":
+                    return True
 
-    def get_analysis_summary(self) -> dict:
-        """Get summary of analysis quality indicators."""
+        return False
+
+    def _is_complex_conditional(self, node: ast.If) -> bool:
+        """
+        Check if an if statement has complex conditional logic.
+
+        Args:
+            node: AST If node
+
+        Returns:
+            True if conditional logic is complex
+        """
+        # Count the depth and complexity of the condition
+        condition_complexity = self._calculate_expression_complexity(node.test)
+
+        # Consider it complex if it has multiple boolean operators or deep nesting
+        return condition_complexity > 2
+
+    def _calculate_expression_complexity(self, node: ast.AST) -> int:
+        """
+        Calculate the complexity score of an expression.
+
+        Args:
+            node: AST node representing an expression
+
+        Returns:
+            Complexity score (higher = more complex)
+        """
+        if isinstance(node, (ast.BoolOp, ast.Compare)):
+            return 1 + sum(
+                self._calculate_expression_complexity(child)
+                for child in ast.iter_child_nodes(node)
+            )
+        elif isinstance(node, ast.Call):
+            return 1
+        else:
+            return 0
+
+    def get_analysis_summary(self) -> dict[str, Any]:
+        """
+        Get comprehensive analysis summary.
+
+        Returns:
+            Dictionary with analysis metadata and quality indicators
+        """
         return {
+            "function_name": self.func_name,
+            "function_def_found": self.function_def_found,
+            "dataframe_parameters": list(self.df_tracker.get_dataframe_params()),
+            "dataframe_variables": list(self.df_tracker.get_all_dataframe_vars()),
             "udf_count": self.udf_count,
             "dynamic_operations": self.dynamic_operations,
             "complex_expressions": self.complex_expressions,
-            "unparseable_expressions": self.unparseable_expressions,
+            "errors": self.errors.copy(),
+            "warnings": self.warnings.copy(),
         }

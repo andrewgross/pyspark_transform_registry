@@ -3,7 +3,7 @@
 import pytest
 from pyspark.sql import DataFrame
 
-from pyspark_transform_registry import register_function, load_function
+from pyspark_transform_registry import load_function, register_function
 
 
 @pytest.fixture
@@ -29,7 +29,6 @@ def test_single_parameter_function_registration_and_loading(sample_df, mlflow_tr
     register_function(
         simple_transform,
         name="test_registry.simple_transform",
-        input_example=sample_df,
     )
 
     # Load the function
@@ -59,8 +58,6 @@ def test_multi_parameter_function_registration_and_loading(sample_df, mlflow_tra
     register_function(
         filter_transform,
         name="test_registry.filter_transform",
-        input_example=sample_df,
-        example_params={"min_value": 10, "category_filter": "A"},
     )
 
     # Load the function
@@ -100,8 +97,6 @@ def test_function_with_required_parameters(sample_df, mlflow_tracking):
     register_function(
         required_param_transform,
         name="test_registry.required_param_transform",
-        input_example=sample_df,
-        example_params={"multiplier": 2},
     )
 
     # Load the function
@@ -141,8 +136,6 @@ def test_mixed_default_and_required_parameters(sample_df, mlflow_tracking):
     register_function(
         mixed_param_transform,
         name="test_registry.mixed_param_transform",
-        input_example=sample_df,
-        example_params={"required_col": "new_value", "optional_value": 50},
     )
 
     # Load the function
@@ -180,7 +173,6 @@ def test_backward_compatibility_with_existing_functions(sample_df, mlflow_tracki
     register_function(
         legacy_transform,
         name="test_registry.legacy_transform",
-        input_example=sample_df,
     )
 
     # Load and use the function

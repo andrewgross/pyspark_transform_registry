@@ -31,8 +31,6 @@ def register_function(
     name: str,
     file_path: str | None = None,
     function_name: str | None = None,
-    input_example: DataFrame | None = None,
-    example_params: dict[str, Any] | None = None,
     description: str | None = None,
     extra_pip_requirements: list[str] | None = None,
     tags: dict[str, Any] | None = None,
@@ -51,8 +49,6 @@ def register_function(
         name: Model name for registry (supports 3-part naming: catalog.schema.table)
         file_path: Path to Python file containing the function (for file-based registration)
         function_name: Name of function to extract from file (required for file-based)
-        input_example: Sample input DataFrame for signature inference
-        example_params: Example parameters for multi-parameter functions (for signature inference)
         description: Model description
         extra_pip_requirements: Additional pip requirements beyond auto-detected ones
         tags: Tags to attach to the registered model
@@ -74,8 +70,6 @@ def register_function(
         >>> register_function(
         ...     filter_transform,
         ...     name="my_catalog.my_schema.filter_transform",
-        ...     input_example=sample_df,
-        ...     example_params={"min_value": 10}
         ... )
 
         # File-based registration

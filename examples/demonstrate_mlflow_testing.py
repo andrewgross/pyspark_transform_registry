@@ -4,13 +4,14 @@ Demonstration of how our tests actually verify MLflow functionality.
 """
 
 import inspect
-import tempfile
 import os
+import tempfile
+
 import mlflow
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, lit
 
-from pyspark_transform_registry import register_function, load_function
+from pyspark_transform_registry import load_function, register_function
 
 
 def setup_test_environment():
@@ -91,7 +92,6 @@ def main():
         model_uri = register_function(
             func=demo_transform,
             name="test.demo.transform",
-            input_example=sample_data,
             description="Demo transform for testing",
             infer_schema=True,
         )
@@ -264,4 +264,6 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+    main()
     main()

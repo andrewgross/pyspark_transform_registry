@@ -8,12 +8,12 @@ works correctly with various scenarios.
 
 import pytest
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType
+from pyspark.sql.types import DoubleType, StringType, StructField, StructType
 
-from pyspark_transform_registry.core import register_function, load_function
+from pyspark_transform_registry.core import load_function, register_function
 from pyspark_transform_registry.schema_constraints import (
-    PartialSchemaConstraint,
     ColumnRequirement,
+    PartialSchemaConstraint,
 )
 
 
@@ -99,7 +99,6 @@ class TestLoadingWithValidation:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
         )
 
         # Load function with validation (default behavior)
@@ -123,7 +122,6 @@ class TestLoadingWithValidation:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
         )
 
         # Load function without validation
@@ -144,8 +142,8 @@ class TestLoadingWithValidation:
         """Test validation failure when required columns are missing."""
         # Create explicit schema constraint since static analysis might fail in test
         from pyspark_transform_registry.schema_constraints import (
-            PartialSchemaConstraint,
             ColumnRequirement,
+            PartialSchemaConstraint,
         )
 
         constraint = PartialSchemaConstraint(
@@ -160,7 +158,6 @@ class TestLoadingWithValidation:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
             schema_constraint=constraint,
         )
 
@@ -181,8 +178,8 @@ class TestLoadingWithValidation:
         """Test validation failure when column types are wrong."""
         # Create explicit schema constraint
         from pyspark_transform_registry.schema_constraints import (
-            PartialSchemaConstraint,
             ColumnRequirement,
+            PartialSchemaConstraint,
         )
 
         constraint = PartialSchemaConstraint(
@@ -197,7 +194,6 @@ class TestLoadingWithValidation:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
             schema_constraint=constraint,
         )
 
@@ -230,7 +226,6 @@ class TestLoadingWithValidation:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
             schema_constraint=PartialSchemaConstraint(
                 required_columns=[
                     ColumnRequirement("customer_id", "string"),
@@ -259,8 +254,6 @@ class TestLoadingWithValidation:
         register_function(
             multi_param_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
-            example_params={"multiplier": 2, "filter_threshold": 50},
         )
 
         # Load function with validation
@@ -306,7 +299,6 @@ class TestLoadingWithValidation:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
         )
 
         # Load specific version (version 1) with validation
@@ -328,7 +320,6 @@ class TestLoadingWithValidation:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
         )
 
         # This test simulates the case where schema constraint loading fails
@@ -361,8 +352,8 @@ class TestValidationErrorMessages:
 
         # Create explicit schema constraint
         from pyspark_transform_registry.schema_constraints import (
-            PartialSchemaConstraint,
             ColumnRequirement,
+            PartialSchemaConstraint,
         )
 
         constraint = PartialSchemaConstraint(
@@ -377,7 +368,6 @@ class TestValidationErrorMessages:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
             schema_constraint=constraint,
         )
 
@@ -409,8 +399,8 @@ class TestValidationErrorMessages:
 
         # Create explicit schema constraint
         from pyspark_transform_registry.schema_constraints import (
-            PartialSchemaConstraint,
             ColumnRequirement,
+            PartialSchemaConstraint,
         )
 
         constraint = PartialSchemaConstraint(
@@ -425,7 +415,6 @@ class TestValidationErrorMessages:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
             schema_constraint=constraint,
         )
 
@@ -455,7 +444,6 @@ class TestValidationIntegration:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
         )
 
         # Load and execute
@@ -488,7 +476,6 @@ class TestValidationIntegration:
         register_function(
             sample_transform_function,
             name=model_name,
-            input_example=valid_test_dataframe,
         )
 
         # Load function with and without validation

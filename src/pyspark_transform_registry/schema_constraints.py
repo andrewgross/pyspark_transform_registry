@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class ColumnRequirement:
     """
     Represents a requirement for a specific column in a DataFrame.
@@ -49,7 +49,7 @@ class ColumnRequirement:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ColumnTransformation:
     """
     Represents a transformation applied to a column by a transform function.
@@ -111,15 +111,18 @@ class PartialSchemaConstraint:
     warnings: list[str] = field(default_factory=list)
 
     def __eq__(self, other):
+        if not isinstance(other, PartialSchemaConstraint):
+            return False
+
         return (
-            self.required_columns == other.required_columns
-            and self.optional_columns == other.optional_columns
-            and self.added_columns == other.added_columns
-            and self.modified_columns == other.modified_columns
-            and self.removed_columns == other.removed_columns
+            set(self.required_columns) == set(other.required_columns)
+            and set(self.optional_columns) == set(other.optional_columns)
+            and set(self.added_columns) == set(other.added_columns)
+            and set(self.modified_columns) == set(other.modified_columns)
+            and set(self.removed_columns) == set(other.removed_columns)
             and self.preserves_other_columns == other.preserves_other_columns
             and self.analysis_method == other.analysis_method
-            and self.warnings == other.warnings
+            and set(self.warnings) == set(other.warnings)
         )
 
     def to_dict(self) -> dict[str, Any]:

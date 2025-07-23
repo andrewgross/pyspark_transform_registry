@@ -5,11 +5,11 @@ This module tests that function behavior, parameter handling, and MLflow metadat
 are properly preserved through the complete MLflow round-trip process.
 """
 
+import pytest
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, lit
-import pytest
 
-from pyspark_transform_registry import register_function, load_function
+from pyspark_transform_registry import load_function, register_function
 
 
 class TestFunctionalBehaviorFidelity:
@@ -72,8 +72,6 @@ class TestFunctionalBehaviorFidelity:
         register_function(
             func=parameterized_transform,
             name="test.metadata.parameterized_transform",
-            input_example=test_df,
-            example_params={"threshold": 50.0, "category": "premium"},
         )
 
         loaded_func = load_function("test.metadata.parameterized_transform", version=1)
@@ -238,8 +236,6 @@ class TestMLflowMetadataPreservation:
         register_function(
             func=example_function,
             name="test.metadata.example_function",
-            input_example=sample_df,
-            example_params=example_params,
         )
 
         # Test that the function works with the example parameters

@@ -7,9 +7,9 @@ from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, lit
 
 from pyspark_transform_registry.core import (
-    register_function,
-    load_function,
     _load_function_from_file,
+    load_function,
+    register_function,
 )
 
 
@@ -22,14 +22,10 @@ class TestDirectRegistration:
         def simple_transform(df: DataFrame) -> DataFrame:
             return df.select("*")
 
-        # Create test data
-        test_data = spark.createDataFrame([(1, "a"), (2, "b")], ["id", "name"])
-
         # Register function
         model_uri = register_function(
             func=simple_transform,
             name="test.simple.transform",
-            input_example=test_data,
             description="A simple transform function",
         )
 
@@ -42,12 +38,9 @@ class TestDirectRegistration:
         def filter_transform(df: DataFrame, min_value: int = 0) -> DataFrame:
             return df.filter(col("value") > min_value)
 
-        test_data = spark.createDataFrame([(1, 10), (2, 20), (3, 30)], ["id", "value"])
-
         model_uri = register_function(
             func=filter_transform,
             name="test.filter.transform",
-            input_example=test_data,
             extra_pip_requirements=["pandas>=1.0.0"],
             tags={"category": "filter", "author": "test"},
         )
@@ -86,14 +79,11 @@ class TestFileBasedRegistration:
     def test_register_from_file(self, spark, mlflow_tracking):
         """Test registering a function from a file."""
 
-        test_data = spark.createDataFrame([(1, 10), (2, 20)], ["id", "value"])
-
         # Register function from fixture file
         model_uri = register_function(
             file_path="tests/fixtures/simple_transform.py",
             function_name="simple_filter",
             name="test.file.simple_filter",
-            input_example=test_data,
         )
 
         assert model_uri is not None
@@ -153,7 +143,6 @@ class TestFunctionLoading:
         register_function(
             func=test_transform,
             name="test.load.transform",
-            input_example=test_data,
         )
 
         # Load function
@@ -179,14 +168,12 @@ class TestFunctionLoading:
         register_function(
             func=test_transform_v1,
             name="test.version.transform",
-            input_example=test_data,
         )
 
         # Register v2
         register_function(
             func=test_transform_v2,
             name="test.version.transform",
-            input_example=test_data,
         )
 
         # Load specific version

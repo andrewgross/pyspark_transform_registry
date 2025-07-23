@@ -8,18 +8,19 @@ in real-world usage.
 
 import os
 import tempfile
-import pytest
 from unittest.mock import patch
+
+import pytest
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, lit
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+from pyspark.sql.types import IntegerType, StringType, StructField, StructType
 
-from pyspark_transform_registry import register_function, load_function
-from pyspark_transform_registry.schema_constraints import (
-    PartialSchemaConstraint,
-    ColumnRequirement,
-)
+from pyspark_transform_registry import load_function, register_function
 from pyspark_transform_registry.runtime_validation import RuntimeValidator
+from pyspark_transform_registry.schema_constraints import (
+    ColumnRequirement,
+    PartialSchemaConstraint,
+)
 
 
 class TestRegistrationErrorHandling:
@@ -155,47 +156,6 @@ not_a_function = "this is a string, not a function"
 
         test_df = spark.createDataFrame([(1, 100)], ["id", "amount"])
         result = loaded_func(test_df)
-        assert result.count() == 1
-
-    def test_invalid_input_example_type(self, spark, mlflow_tracking):
-        """Test registration with invalid input example types."""
-
-        def simple_function(df: DataFrame) -> DataFrame:
-            return df.select("*")
-
-        # Test with non-DataFrame input_example - should handle gracefully
-        # The system should log a warning and proceed without the input example
-        register_function(
-            func=simple_function,
-            name="test.error.invalid_input_example",
-            input_example="not a dataframe",  # This will cause a warning but not fail
-        )
-
-        # Function should still be loadable and work
-        loaded_func = load_function("test.error.invalid_input_example", version=1)
-        test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
-        result = loaded_func(test_df)
-        assert result.count() == 1
-
-    def test_mismatched_example_params(self, spark, mlflow_tracking):
-        """Test registration with mismatched example parameters."""
-
-        def param_function(df: DataFrame, required_param: str) -> DataFrame:
-            return df.withColumn("param", lit(required_param))
-
-        test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
-
-        # Should handle gracefully even with mismatched params
-        register_function(
-            func=param_function,
-            name="test.error.mismatched_params",
-            input_example=test_df,
-            example_params={"wrong_param": "value"},  # Doesn't match function signature
-        )
-
-        # Function should still be loadable
-        loaded_func = load_function("test.error.mismatched_params", version=1)
-        result = loaded_func(test_df, params={"required_param": "correct"})
         assert result.count() == 1
 
 
@@ -761,4 +721,6 @@ class TestEdgeCaseInputs:
         )
 
         result = loaded_func(extreme_df)
+        assert result.count() == 5
+        assert result.count() == 5
         assert result.count() == 5

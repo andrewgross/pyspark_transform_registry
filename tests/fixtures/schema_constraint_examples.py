@@ -5,22 +5,52 @@ This module contains example transform functions and their expected partial
 schema constraints for testing the schema inference system.
 """
 
-from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import current_timestamp
+
 from pyspark_transform_registry.schema_constraints import (
-    PartialSchemaConstraint,
     ColumnRequirement,
     ColumnTransformation,
+    PartialSchemaConstraint,
 )
 
 
 # Example 1: Add timestamp column - input schema doesn't matter
-def add_timestamp(df: DataFrame, *, column_name: str = "created_at") -> DataFrame:
+def add_timestamp_f(df: DataFrame, *, column_name: str = "created_at") -> DataFrame:
     """Add a timestamp column with current timestamp."""
     return df.withColumn(column_name, F.current_timestamp())
 
 
-EXPECTED_ADD_TIMESTAMP = PartialSchemaConstraint(
+EXPECTED_ADD_TIMESTAMP_F = PartialSchemaConstraint(
+    required_columns=[],
+    added_columns=[ColumnTransformation("created_at", "add", "timestamp", False)],
+    preserves_other_columns=True,
+)
+
+
+def custom_dataframe_name(
+    my_df: DataFrame,
+    *,
+    column_name: str = "created_at",
+) -> DataFrame:
+    """Add a timestamp column with current timestamp."""
+    return my_df.withColumn(column_name, F.current_timestamp())
+
+
+EXPECTED_CUSTOM_DATAFRAME_NAME = PartialSchemaConstraint(
+    required_columns=[],
+    added_columns=[ColumnTransformation("created_at", "add", "timestamp", False)],
+    preserves_other_columns=True,
+)
+
+
+def no_f_functions(my_df: DataFrame, *, column_name: str = "created_at") -> DataFrame:
+    """Add a timestamp column with current timestamp."""
+    return my_df.withColumn(column_name, current_timestamp())
+
+
+EXPECTED_NO_F_FUNCTIONS = PartialSchemaConstraint(
     required_columns=[],
     added_columns=[ColumnTransformation("created_at", "add", "timestamp", False)],
     preserves_other_columns=True,
@@ -28,12 +58,12 @@ EXPECTED_ADD_TIMESTAMP = PartialSchemaConstraint(
 
 
 # Example 2: Normalize amounts - requires 'amount' column
-def normalize_amounts(df: DataFrame, *, scale: float = 1.0) -> DataFrame:
+def normalize_amounts_f(df: DataFrame, *, scale: float = 1.0) -> DataFrame:
     """Normalize amounts by multiplying by scale factor."""
     return df.withColumn("amount", df.amount * scale)
 
 
-EXPECTED_NORMALIZE_AMOUNTS = PartialSchemaConstraint(
+EXPECTED_NORMALIZE_AMOUNTS_F = PartialSchemaConstraint(
     required_columns=[ColumnRequirement("amount", "double", nullable=True)],
     modified_columns=[ColumnTransformation("amount", "modify", "double")],
     preserves_other_columns=True,
@@ -41,21 +71,21 @@ EXPECTED_NORMALIZE_AMOUNTS = PartialSchemaConstraint(
 
 
 # Example 3: Filter with status - requires 'status' column, preserves schema
-def filter_active(df: DataFrame, *, statuses: list = None) -> DataFrame:
+def filter_active_f(df: DataFrame, *, statuses: list = None) -> DataFrame:
     """Filter DataFrame to only active records."""
     if statuses is None:
         statuses = ["active"]
     return df.filter(df.status.isin(statuses))
 
 
-EXPECTED_FILTER_ACTIVE = PartialSchemaConstraint(
+EXPECTED_FILTER_ACTIVE_F = PartialSchemaConstraint(
     required_columns=[ColumnRequirement("status", "string", nullable=True)],
     preserves_other_columns=True,
 )
 
 
 # Example 4: Select specific columns - explicit output schema
-def select_customer_info(df: DataFrame, *, include_phone: bool = False) -> DataFrame:
+def select_customer_info_f(df: DataFrame, *, include_phone: bool = False) -> DataFrame:
     """Select customer information columns."""
     cols = ["customer_id", "name", "email"]
     if include_phone:
@@ -63,7 +93,7 @@ def select_customer_info(df: DataFrame, *, include_phone: bool = False) -> DataF
     return df.select(*cols)
 
 
-EXPECTED_SELECT_CUSTOMER_INFO = PartialSchemaConstraint(
+EXPECTED_SELECT_CUSTOMER_INFO_F = PartialSchemaConstraint(
     required_columns=[
         ColumnRequirement("customer_id", "string", nullable=True),
         ColumnRequirement("name", "string", nullable=True),
@@ -77,7 +107,7 @@ EXPECTED_SELECT_CUSTOMER_INFO = PartialSchemaConstraint(
 
 
 # Example 5: Complex transform with multiple operations
-def customer_analytics(df: DataFrame, *, min_orders: int = 5) -> DataFrame:
+def customer_analytics_f(df: DataFrame, *, min_orders: int = 5) -> DataFrame:
     """Perform customer analytics with multiple transformations."""
     return (
         df.filter(df.order_count >= min_orders)
@@ -90,7 +120,7 @@ def customer_analytics(df: DataFrame, *, min_orders: int = 5) -> DataFrame:
     )
 
 
-EXPECTED_CUSTOMER_ANALYTICS = PartialSchemaConstraint(
+EXPECTED_CUSTOMER_ANALYTICS_F = PartialSchemaConstraint(
     required_columns=[
         ColumnRequirement("order_count", "integer", nullable=True),
         ColumnRequirement("temp_staging_column", "string", nullable=True),
@@ -105,12 +135,16 @@ EXPECTED_CUSTOMER_ANALYTICS = PartialSchemaConstraint(
 
 
 # Example 6: Function with string operations
-def clean_text_data(df: DataFrame, *, target_column: str = "description") -> DataFrame:
+def clean_text_data_f(
+    df: DataFrame,
+    *,
+    target_column: str = "description",
+) -> DataFrame:
     """Clean text data by trimming and converting to lowercase."""
     return df.withColumn(target_column, F.lower(F.trim(df[target_column])))
 
 
-EXPECTED_CLEAN_TEXT_DATA = PartialSchemaConstraint(
+EXPECTED_CLEAN_TEXT_DATA_F = PartialSchemaConstraint(
     required_columns=[ColumnRequirement("description", "string", nullable=True)],
     modified_columns=[ColumnTransformation("description", "modify", "string")],
     preserves_other_columns=True,
@@ -118,7 +152,7 @@ EXPECTED_CLEAN_TEXT_DATA = PartialSchemaConstraint(
 
 
 # Example 7: Function with mathematical operations
-def calculate_metrics(
+def calculate_metrics_f(
     df: DataFrame,
     *,
     revenue_col: str = "revenue",
@@ -131,7 +165,7 @@ def calculate_metrics(
     )
 
 
-EXPECTED_CALCULATE_METRICS = PartialSchemaConstraint(
+EXPECTED_CALCULATE_METRICS_F = PartialSchemaConstraint(
     required_columns=[
         ColumnRequirement("revenue", "double", nullable=True),
         ColumnRequirement("cost", "double", nullable=True),
@@ -145,7 +179,7 @@ EXPECTED_CALCULATE_METRICS = PartialSchemaConstraint(
 
 
 # Example 8: Function with conditional column creation
-def add_category_flags(
+def add_category_flags_f(
     df: DataFrame,
     *,
     category_col: str = "category",
@@ -163,7 +197,7 @@ def add_category_flags(
     return result_df
 
 
-EXPECTED_ADD_CATEGORY_FLAGS = PartialSchemaConstraint(
+EXPECTED_ADD_CATEGORY_FLAGS_F = PartialSchemaConstraint(
     required_columns=[ColumnRequirement("category", "string", nullable=True)],
     added_columns=[
         ColumnTransformation("is_premium", "add", "boolean", nullable=False),
@@ -175,7 +209,7 @@ EXPECTED_ADD_CATEGORY_FLAGS = PartialSchemaConstraint(
 
 
 # Example 9: Function with aggregations (challenging for static analysis)
-def summarize_by_group(
+def summarize_by_group_f(
     df: DataFrame,
     *,
     group_col: str = "group_id",
@@ -191,7 +225,7 @@ def summarize_by_group(
     )
 
 
-EXPECTED_SUMMARIZE_BY_GROUP = PartialSchemaConstraint(
+EXPECTED_SUMMARIZE_BY_GROUP_F = PartialSchemaConstraint(
     required_columns=[
         ColumnRequirement("group_id", "string", nullable=True),
         ColumnRequirement("value", "double", nullable=True),
@@ -208,7 +242,7 @@ EXPECTED_SUMMARIZE_BY_GROUP = PartialSchemaConstraint(
 
 
 # Example 10: Function with UDF (challenging for static analysis)
-def apply_business_logic(df: DataFrame, *, threshold: float = 100.0) -> DataFrame:
+def apply_business_logic_f(df: DataFrame, *, threshold: float = 100.0) -> DataFrame:
     """Apply complex business logic using UDF."""
 
     @F.udf("boolean")
@@ -223,7 +257,7 @@ def apply_business_logic(df: DataFrame, *, threshold: float = 100.0) -> DataFram
     return df.withColumn("high_value_flag", is_high_value(df.amount, df.category))
 
 
-EXPECTED_APPLY_BUSINESS_LOGIC = PartialSchemaConstraint(
+EXPECTED_APPLY_BUSINESS_LOGIC_F = PartialSchemaConstraint(
     required_columns=[
         ColumnRequirement("amount", "double", nullable=True),
         ColumnRequirement("category", "string", nullable=True),
@@ -234,21 +268,6 @@ EXPECTED_APPLY_BUSINESS_LOGIC = PartialSchemaConstraint(
     preserves_other_columns=True,
     warnings=["Contains UDF - static analysis may be incomplete"],
 )
-
-
-# Test data for validating constraint examples
-ALL_TRANSFORM_EXAMPLES = [
-    (add_timestamp, EXPECTED_ADD_TIMESTAMP, "add_timestamp"),
-    (normalize_amounts, EXPECTED_NORMALIZE_AMOUNTS, "normalize_amounts"),
-    (filter_active, EXPECTED_FILTER_ACTIVE, "filter_active"),
-    (select_customer_info, EXPECTED_SELECT_CUSTOMER_INFO, "select_customer_info"),
-    (customer_analytics, EXPECTED_CUSTOMER_ANALYTICS, "customer_analytics"),
-    (clean_text_data, EXPECTED_CLEAN_TEXT_DATA, "clean_text_data"),
-    (calculate_metrics, EXPECTED_CALCULATE_METRICS, "calculate_metrics"),
-    (add_category_flags, EXPECTED_ADD_CATEGORY_FLAGS, "add_category_flags"),
-    (summarize_by_group, EXPECTED_SUMMARIZE_BY_GROUP, "summarize_by_group"),
-    (apply_business_logic, EXPECTED_APPLY_BUSINESS_LOGIC, "apply_business_logic"),
-]
 
 
 # Edge case examples that should be harder to analyze
@@ -271,5 +290,23 @@ EXPECTED_DYNAMIC_COLUMN = PartialSchemaConstraint(
 
 
 EDGE_CASE_EXAMPLES = [
-    (dynamic_column_transform, EXPECTED_DYNAMIC_COLUMN, "dynamic_column_transform"),
+    (dynamic_column_transform, EXPECTED_DYNAMIC_COLUMN),
 ]
+
+BASIC_TRANSFORM_EXAMPLES = [
+    (add_timestamp_f, EXPECTED_ADD_TIMESTAMP_F),
+    (custom_dataframe_name, EXPECTED_CUSTOM_DATAFRAME_NAME),
+    (no_f_functions, EXPECTED_NO_F_FUNCTIONS),
+    (normalize_amounts_f, EXPECTED_NORMALIZE_AMOUNTS_F),
+    (filter_active_f, EXPECTED_FILTER_ACTIVE_F),
+    (select_customer_info_f, EXPECTED_SELECT_CUSTOMER_INFO_F),
+    (customer_analytics_f, EXPECTED_CUSTOMER_ANALYTICS_F),
+    (clean_text_data_f, EXPECTED_CLEAN_TEXT_DATA_F),
+    (calculate_metrics_f, EXPECTED_CALCULATE_METRICS_F),
+    (add_category_flags_f, EXPECTED_ADD_CATEGORY_FLAGS_F),
+    (summarize_by_group_f, EXPECTED_SUMMARIZE_BY_GROUP_F),
+    (apply_business_logic_f, EXPECTED_APPLY_BUSINESS_LOGIC_F),
+]
+
+# Test data for validating constraint examples
+ALL_TRANSFORM_EXAMPLES = BASIC_TRANSFORM_EXAMPLES + EDGE_CASE_EXAMPLES

@@ -7,7 +7,7 @@ import pytest
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col
 
-from pyspark_transform_registry.core import register_function, load_function
+from pyspark_transform_registry.core import load_function, register_function
 
 
 class TestEndToEndWorkflow:
@@ -33,7 +33,6 @@ class TestEndToEndWorkflow:
         model_uri = register_function(
             func=business_logic,
             name="business.finance.amount_processor",
-            input_example=test_data,
             description="Process amounts above threshold",
             tags={"department": "finance", "owner": "data_team"},
         )
@@ -65,7 +64,6 @@ class TestEndToEndWorkflow:
             file_path="tests/fixtures/simple_transform.py",
             function_name="simple_filter",
             name="etl.data.simple_filter",
-            input_example=test_data,
             description="Simple filter transform from file",
             extra_pip_requirements=["pyspark>=3.0.0"],
         )
@@ -112,7 +110,58 @@ class TestEndToEndWorkflow:
                 file_path="tests/fixtures/complex_transform.py",
                 function_name=func_name,
                 name=model_name,
-                input_example=test_data,
+                description=f"Pipeline step: {func_name}",
+            )
+
+        # Load and test individual functions
+        data_cleaner = load_function("pipeline.clean.data_cleaner", version=1)
+        feature_engineer = load_function(
+            "pipeline.features.feature_engineer",
+            version=1,
+        )
+        ml_scorer = load_function("pipeline.ml.ml_scorer", version=1)
+        full_pipeline = load_function("pipeline.complete.full_pipeline", version=1)
+
+        # Test individual steps
+        cleaned = data_cleaner(test_data)
+        assert cleaned.count() == 3  # All amounts > 0
+        assert "status" in cleaned.columns
+
+        featured = feature_engineer(cleaned)
+        assert "risk_category" in featured.columns
+
+        scored = ml_scorer(featured)
+        assert "score" in scored.columns
+
+        # Test full pipeline
+        result = full_pipeline(test_data)
+        assert result.count() == 3
+        assert "status" in result.columns
+        assert "risk_category" in result.columns
+        assert "score" in result.columns
+
+    def test_complex_pipeline_workflow_f(self, spark, mlflow_tracking):
+        """Test workflow with complex pipeline from file."""
+
+        # Create test data
+        test_data = spark.createDataFrame(
+            [(1, 50), (2, 150), (3, 1500)],
+            ["id", "amount"],
+        )
+
+        # Register multiple functions from complex file
+        functions_to_register = [
+            ("data_cleaner_f", "pipeline.clean.data_cleaner"),
+            ("feature_engineer_f", "pipeline.features.feature_engineer"),
+            ("ml_scorer_f", "pipeline.ml.ml_scorer"),
+            ("full_pipeline_f", "pipeline.complete.full_pipeline"),
+        ]
+
+        for func_name, model_name in functions_to_register:
+            register_function(
+                file_path="tests/fixtures/complex_transform.py",
+                function_name=func_name,
+                name=model_name,
                 description=f"Pipeline step: {func_name}",
             )
 
@@ -161,21 +210,18 @@ class TestEndToEndWorkflow:
         register_function(
             func=transform_v1,
             name="test.versioning.transform",
-            input_example=test_data,
             description="Version 1",
         )
 
         register_function(
             func=transform_v2,
             name="test.versioning.transform",
-            input_example=test_data,
             description="Version 2",
         )
 
         register_function(
             func=transform_v3,
             name="test.versioning.transform",
-            input_example=test_data,
             description="Version 3",
         )
 
@@ -242,7 +288,6 @@ class TestEndToEndWorkflow:
         register_function(
             func=documented_transform,
             name="test.metadata.documented",
-            input_example=test_data,
             description="Test metadata preservation",
             tags={"has_docs": "true", "complexity": "low"},
         )

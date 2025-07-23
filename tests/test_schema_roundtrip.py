@@ -9,9 +9,9 @@ retrieve schema → generate same constraints.
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, lit, when
 
-from pyspark_transform_registry import register_function, load_function
-from pyspark_transform_registry.static_analysis import analyze_function
+from pyspark_transform_registry import load_function, register_function
 from pyspark_transform_registry.schema_constraints import PartialSchemaConstraint
+from pyspark_transform_registry.static_analysis import analyze_function
 
 
 class TestSchemaRoundTrip:
@@ -85,15 +85,6 @@ class TestSchemaRoundTrip:
                 )
             )
 
-        # Create sample data for signature inference
-        sample_df = spark.createDataFrame(
-            [
-                ("ord_1", "cust_1", 500.0, "active"),
-                ("ord_2", "cust_2", 1500.0, "pending"),
-            ],
-            ["order_id", "customer_id", "amount", "status"],
-        )
-
         # Step 1: Analyze original function
         original_constraint = analyze_function(process_orders)
 
@@ -101,7 +92,6 @@ class TestSchemaRoundTrip:
         register_function(
             func=process_orders,
             name="test.roundtrip.process_orders",
-            input_example=sample_df,
             infer_schema=True,
         )
 
@@ -152,12 +142,6 @@ class TestSchemaRoundTrip:
                 .select("product_id", "category", "amount", "filtered_by")
             )
 
-        # Create sample data
-        sample_df = spark.createDataFrame(
-            [("prod_1", "electronics", 150.0), ("prod_2", "books", 25.0)],
-            ["product_id", "category", "amount"],
-        )
-
         # Step 1: Analyze original function
         original_constraint = analyze_function(filter_by_category)
 
@@ -165,8 +149,6 @@ class TestSchemaRoundTrip:
         register_function(
             func=filter_by_category,
             name="test.roundtrip.filter_by_category",
-            input_example=sample_df,
-            example_params={"category": "electronics", "min_amount": 50.0},
             infer_schema=True,
         )
 
@@ -252,7 +234,6 @@ class TestSchemaRoundTrip:
         register_function(
             func=validate_transactions,
             name="test.roundtrip.validate_transactions",
-            input_example=valid_df,
             infer_schema=True,
         )
 

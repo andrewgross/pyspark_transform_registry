@@ -176,7 +176,6 @@ def filter_by_category(df: DataFrame, category: str, min_amount: float = 0.0) ->
         (col("amount") >= min_amount)
     )
 
-# Register with example for signature inference
 sample_df = spark.createDataFrame([
     ("electronics", 100.0, "order_1"),
     ("books", 25.0, "order_2")
@@ -185,15 +184,13 @@ sample_df = spark.createDataFrame([
 register_function(
     func=filter_by_category,
     name="retail.filtering.filter_by_category",
-    input_example=sample_df,
-    example_params={"category": "electronics", "min_amount": 50.0}
 )
 
 # Load and use with parameters
 filter_func = load_function("retail.filtering.filter_by_category", version=1)
 
 # Use with validation - validates DataFrame structure before filtering
-electronics = filter_func(orders_df, params={"category": "electronics", "min_amount": 100.0})
+electronics = filter_func(sample_df, params={"category": "electronics", "min_amount": 100.0})
 ```
 
 ### Source Code Inspection
@@ -233,8 +230,6 @@ Register a PySpark transform function in MLflow's model registry.
 - `name` (str): Model name for registry (supports 3-part naming)
 - `file_path` (str, optional): Path to Python file containing the function
 - `function_name` (str, optional): Name of function to extract from file
-- `input_example` (DataFrame, optional): Sample input DataFrame for signature inference
-- `example_params` (dict, optional): Example parameters for multi-parameter functions
 - `description` (str, optional): Model description
 - `extra_pip_requirements` (list, optional): Additional pip requirements
 - `tags` (dict, optional): Tags to attach to the registered model

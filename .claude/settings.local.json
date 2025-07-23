@@ -18,7 +18,8 @@
       "Bash(python -m pytest tests/ -v --tb=short)",
       "Bash(ls:*)",
       "Bash(python:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(timeout 30s uv run --dev pytest:*)"
     ],
     "deny": []
   }
