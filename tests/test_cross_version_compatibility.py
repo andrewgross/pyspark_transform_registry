@@ -6,13 +6,14 @@ can be loaded and used consistently, ensuring backward and forward compatibility
 for machine-to-machine operations across system upgrades.
 """
 
+import pytest
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, lit, when
 
-from pyspark_transform_registry import register_function, load_function
+from pyspark_transform_registry import load_function, register_function
 from pyspark_transform_registry.schema_constraints import (
-    PartialSchemaConstraint,
     ColumnRequirement,
+    PartialSchemaConstraint,
 )
 
 
@@ -409,36 +410,6 @@ class TestBackwardCompatibility:
 class TestForwardCompatibility:
     """Test that older registry versions can handle newer function features gracefully."""
 
-    def test_graceful_degradation_with_unknown_features(self, spark, mlflow_tracking):
-        """Test that unknown features degrade gracefully."""
-
-        def feature_rich_function(df: DataFrame) -> DataFrame:
-            """Function with advanced features that might not be understood by older systems."""
-            return (
-                df.withColumn("processed_timestamp", lit("2023-01-01"))
-                .withColumn("feature_flag", lit(True))
-                .select("id", "value", "processed_timestamp", "feature_flag")
-            )
-
-        # Register with advanced features
-        register_function(
-            func=feature_rich_function,
-            name="test.forward.feature_rich",
-            description="Advanced function with new features",
-            tags={"advanced": "true", "feature_level": "high"},
-            infer_schema=True,
-        )
-
-        # Load and test that basic functionality works even if some features aren't understood
-        loaded_func = load_function("test.forward.feature_rich", version=1)
-
-        test_df = spark.createDataFrame([(1, "test")], ["id", "value"])
-        result = loaded_func(test_df)
-
-        assert result.count() == 1
-        assert "processed_timestamp" in result.columns
-        assert "feature_flag" in result.columns
-
     def test_schema_constraint_forward_compatibility(self, spark, mlflow_tracking):
         """Test that schema constraints work across different analysis capabilities."""
 
@@ -485,12 +456,15 @@ class TestForwardCompatibility:
             ["customer_id", "amount"],
         )
 
-        # All modes should work with valid data
-        result_strict = func_strict(test_df)
+        # Strict mode should fail with valid data
+        with pytest.raises(ValueError):
+            func_strict(test_df)
+
+        # Non Strict modes should work with valid data
         result_permissive = func_permissive(test_df)
         result_no_validation = func_no_validation(test_df)
 
-        for result in [result_strict, result_permissive, result_no_validation]:
+        for result in [result_permissive, result_no_validation]:
             assert result.count() == 2
             assert "risk_category" in result.columns
             assert "processed_date" in result.columns

@@ -8,7 +8,7 @@ schema constraints for testing the schema inference system.
 import pyspark.sql.functions as F
 import pytest
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import current_timestamp
+from pyspark.sql.functions import col, current_timestamp, lit, when
 
 from pyspark_transform_registry.schema_constraints import (
     ColumnRequirement,
@@ -271,6 +271,44 @@ EXPECTED_APPLY_BUSINESS_LOGIC_F = PartialSchemaConstraint(
 )
 
 
+def enrich_customer_data(df: DataFrame) -> DataFrame:
+    """
+    Enrich customer data with calculated fields.
+
+    This function adds derived fields for customer analysis.
+    """
+    return (
+        df.withColumn(
+            "full_name",
+            col("first_name").cast("string")
+            + lit(" ")
+            + col("last_name").cast("string"),
+        )
+        .withColumn(
+            "age_category",
+            when(col("age") >= 65, "senior")
+            .when(col("age") >= 18, "adult")
+            .otherwise("minor"),
+        )
+        .select("customer_id", "full_name", "age", "age_category")
+    )
+
+
+EXPECTED_ENRICH_CUSTOMER_DATA = PartialSchemaConstraint(
+    required_columns=[
+        ColumnRequirement("customer_id", "string", nullable=True),
+        ColumnRequirement("first_name", "string", nullable=True),
+        ColumnRequirement("last_name", "string", nullable=True),
+        ColumnRequirement("age", "integer", nullable=True),
+    ],
+    added_columns=[
+        ColumnTransformation("full_name", "add", "string", nullable=True),
+        ColumnTransformation("age_category", "add", "string", nullable=True),
+    ],
+    preserves_other_columns=False,
+)
+
+
 # Edge case examples that should be harder to analyze
 def dynamic_column_transform(df: DataFrame, *, columns: list = None) -> DataFrame:
     """Transform with dynamic column names - hard to analyze statically."""
@@ -278,8 +316,8 @@ def dynamic_column_transform(df: DataFrame, *, columns: list = None) -> DataFram
         columns = ["col1", "col2"]
 
     result_df = df
-    for col in columns:
-        result_df = result_df.withColumn(f"processed_{col}", result_df[col] * 2)
+    for _col in columns:
+        result_df = result_df.withColumn(f"processed_{_col}", result_df[_col] * 2)
     return result_df
 
 
@@ -310,6 +348,7 @@ BASIC_TRANSFORM_EXAMPLES = [
     ),
     (summarize_by_group_f, EXPECTED_SUMMARIZE_BY_GROUP_F),
     (apply_business_logic_f, EXPECTED_APPLY_BUSINESS_LOGIC_F),
+    (enrich_customer_data, EXPECTED_ENRICH_CUSTOMER_DATA),
 ]
 
 # Test data for validating constraint examples
