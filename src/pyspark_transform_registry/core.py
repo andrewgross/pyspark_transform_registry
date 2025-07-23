@@ -385,3 +385,21 @@ def _load_schema_constraint(
         )
 
     return None
+
+
+def get_latest_function_version(name: str) -> int:
+    """
+    Get the latest version of a function in the registry.
+
+    Args:
+        name: Model name (registered_model_name) in registry
+
+    Returns:
+        Latest version of the function
+    """
+    filter_string = f"name = '{name}'"
+    model_versions = mlflow.search_model_versions(
+        filter_string=filter_string,
+    )
+    latest_version = max(model_versions, key=lambda x: int(x.version))
+    return latest_version.version
