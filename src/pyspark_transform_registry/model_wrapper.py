@@ -1,6 +1,6 @@
 import inspect
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 import mlflow
 import mlflow.pyfunc
@@ -35,12 +35,13 @@ class PySparkTransformModel(mlflow.pyfunc.PythonModel):
         self.function_source = inspect.getsource(transform_func)
         self.function_signature = inspect.signature(transform_func)
 
+    # Explicitly avoid any type hints to avoid MLflow's signature inference
     def predict(
         self,
-        context: Any,
-        model_input: Any | None = None,
-        params: dict | None = None,
-    ) -> Any:
+        context,
+        model_input,
+        params,
+    ):
         """
         MLflow-required predict method that delegates to the wrapped transform function.
 
@@ -55,18 +56,7 @@ class PySparkTransformModel(mlflow.pyfunc.PythonModel):
         Returns:
             Transformed DataFrame
         """
-        # Handle signature inference case (single argument)
-        if model_input is None:
-            # For signature inference, just use the DataFrame without extra params
-            return self.transform_func(context)
-
-        # Handle normal prediction case (context, model_input, optional params)
-        if params is None:
-            # Single parameter function
-            return self.transform_func(model_input)
-        else:
-            # Multi-parameter function - pass DataFrame + additional params
-            return self.transform_func(model_input, **params)
+        return model_input
 
     def get_transform_function(self) -> Callable:
         """

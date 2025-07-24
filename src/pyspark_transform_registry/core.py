@@ -13,7 +13,9 @@ from typing import Any
 
 import mlflow
 import mlflow.pyfunc
+from mlflow.models import ModelSignature
 from mlflow.models.model import ModelInfo
+from mlflow.types.schema import ColSpec, Schema
 from pyspark.sql import DataFrame
 
 from .model_wrapper import PySparkTransformModel
@@ -152,37 +154,21 @@ def register_function(
                 inferred_constraint.warnings,
             )
 
-    # Log the model - handle nested runs if already in a run
+    # Generate a dummy signature for MLFlow as our actual signature is not supported by MLFlow
+    dummy_signature = generate_dummy_signature()
+    log_params["signature"] = dummy_signature
+
     try:
-        # Check if there's already an active run
         active_run = mlflow.active_run()
         if active_run is not None:
-            # Use nested run
             with mlflow.start_run(nested=True):
-                # Set tags explicitly in the run
-                for tag_key, tag_value in log_params["tags"].items():
-                    mlflow.set_tag(tag_key, tag_value)
-
-                # Use the registered model name for MLflow 3.0+
-                logged_model = mlflow.pyfunc.log_model(name=_func_name, **log_params)
+                logged_model = _log_model(name=_func_name, **log_params)
         else:
-            # Start a new run
             with mlflow.start_run():
-                # Set tags explicitly in the run
-                for tag_key, tag_value in log_params["tags"].items():
-                    mlflow.set_tag(tag_key, tag_value)
-
-                # Use the registered model name for MLflow 3.0+
-                logged_model = mlflow.pyfunc.log_model(name=_func_name, **log_params)
+                logged_model = _log_model(name=_func_name, **log_params)
     except Exception:
-        # Fallback: try with nested=True
         with mlflow.start_run(nested=True):
-            # Set tags explicitly in the run
-            for tag_key, tag_value in log_params["tags"].items():
-                mlflow.set_tag(tag_key, tag_value)
-
-            # Use a simple artifact name but register with the full name
-            logged_model = mlflow.pyfunc.log_model(name=_func_name, **log_params)
+            logged_model = _log_model(name=_func_name, **log_params)
 
     return logged_model
 
@@ -403,3 +389,22 @@ def get_latest_function_version(name: str) -> int:
     )
     latest_version = max(model_versions, key=lambda x: int(x.version))
     return latest_version.version
+
+
+def generate_dummy_signature() -> ModelSignature:
+    """
+    Generate a dummy signature for a function.
+
+    Returns:
+        ModelSignature: A dummy signature
+    """
+    input_schema = Schema([ColSpec("string", "any", required=False)])
+    output_schema = Schema([ColSpec("string", "any")])
+    return ModelSignature(inputs=input_schema, outputs=output_schema)
+
+
+def _log_model(name: str, **log_params):
+    for tag_key, tag_value in log_params["tags"].items():
+        mlflow.set_tag(tag_key, tag_value)
+
+    return mlflow.pyfunc.log_model(name=name, **log_params)
