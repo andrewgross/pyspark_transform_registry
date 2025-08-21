@@ -6,9 +6,6 @@ using MLflow's model registry. Supports both single-parameter and multi-paramete
 functions with automatic dependency detection and signature inference.
 """
 
-import warnings
-from typing import Any
-
 # Import the new simplified API
 from .core import get_latest_function_version, load_function, register_function
 
@@ -17,23 +14,6 @@ from .metadata import _resolve_fully_qualified_name
 
 # Keep model wrapper for advanced usage
 from .model_wrapper import PySparkTransformModel
-from .validation import validate_transform_input
-
-
-def find_transform_versions(*args, **kwargs) -> Any:
-    """
-    DEPRECATED: This function has been removed.
-
-    Use MLflow's native model registry APIs directly for model discovery.
-    """
-    warnings.warn(
-        "find_transform_versions has been removed. Use MLflow's model registry APIs directly.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    raise NotImplementedError(
-        "find_transform_versions has been removed. Use MLflow's model registry APIs directly.",
-    )
 
 
 __version__ = "0.1.0"
@@ -45,7 +25,6 @@ __all__ = [
     "get_latest_function_version",
     "PySparkTransformModel",
     "_resolve_fully_qualified_name",
-    "validate_transform_input",
     # Backwards compatibility
     "find_transform_versions",
 ]

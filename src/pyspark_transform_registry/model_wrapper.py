@@ -18,22 +18,16 @@ class PySparkTransformModel(mlflow.pyfunc.PythonModel):
     def __init__(
         self,
         transform_func: Callable,
-        schema_constraint: Any | None = None,
     ):
         """
         Initialize the PySpark transform model wrapper.
 
         Args:
             transform_func: The PySpark transform function to wrap
-            schema_constraint: Optional PartialSchemaConstraint for validation
         """
         self.transform_func = transform_func
         self.function_name = transform_func.__name__
-        self.schema_constraint = schema_constraint
-
-        # Store function source and signature for reconstruction
         self.function_source = inspect.getsource(transform_func)
-        self.function_signature = inspect.signature(transform_func)
 
     # Explicitly avoid any type hints to avoid MLflow's signature inference
     def predict(
@@ -61,9 +55,6 @@ class PySparkTransformModel(mlflow.pyfunc.PythonModel):
     def get_transform_function(self) -> Callable:
         """
         Get the original transform function to preserve existing API.
-
-        Returns:
-            The original PySpark transform function
         """
         return self.transform_func
 
@@ -71,14 +62,13 @@ class PySparkTransformModel(mlflow.pyfunc.PythonModel):
         """Get the name of the wrapped function."""
         return self.function_name
 
+    def get_function_source(self) -> str:
+        """Get the source code of the wrapped function."""
+        return self.function_source
+
     def get_metadata(self) -> dict[str, Any]:
         """Get metadata about the wrapped function."""
         return {
             "function_name": self.function_name,
-            "signature": str(self.function_signature),
             "docstring": self.transform_func.__doc__,
         }
-
-    def get_signature(self) -> inspect.Signature:
-        """Get the signature of the wrapped function."""
-        return self.function_signature

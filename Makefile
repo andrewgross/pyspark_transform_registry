@@ -17,10 +17,10 @@ pre-commit:
 	uv run pre-commit run --all-files
 
 test:
-	uv run --dev pytest
+	uv run --dev pytest tests/
 
 test-verbose:
-	uv run --dev pytest -v
+	uv run --dev pytest -v tests/
 
 # Code quality
 lint:
