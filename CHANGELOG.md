@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2025-09-05
+
+### Features
+- Add `load_function_uri()` and `load_transform_uri()` for URI-based function loading (a925531)
+- Add `get_latest_transform_version()` function alias for consistency with transform naming (a925531)
+- Add `get_transforms()` function for searching and listing registered transforms (a925531)
+- Add model type tagging with "transform" type for better model categorization (a925531)
+
+### Enhancements
+- Improve API consistency by making `register_transform()` the primary function with `register_function()` as alias (a925531)
+- Improve API consistency by making `load_transform()` the primary function with `load_function()` as alias (a925531)
+- Rename `load_transform_from_uri()` to `load_transform_uri()` for better API consistency (a925531)
+- Enhanced function aliasing system with proper primary/secondary function relationships (a925531)
+- Update all tests to use the new `register_transform()`/`load_transform()` API consistently (a925531)
+- Improved type hints with `Optional` and `Union` imports for better type safety (a925531)
+
+### Documentation
+- Update README.md with `uv add` installation instructions alongside pip (a925531)
+- Improve README examples to use `register_transform()` and `load_transform()` as primary API (a925531)
+- Better import examples in README with explicit function imports (a925531)
+- Update all code examples to use consistent import patterns with `pyspark.sql.functions as F` (a925531)
+
+### Dependencies
+- Setup dynamic versioning in pyproject.toml using `__version__` attribute from package (a925531)
+
 ## [0.6.0] - 2025-09-05
 
 ### Features

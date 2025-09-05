@@ -7,7 +7,7 @@ import pytest
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col
 
-from pyspark_transform_registry.core import load_function, register_function
+from pyspark_transform_registry.core import load_transform, register_transform
 
 
 class TestEndToEndWorkflow:
@@ -30,7 +30,7 @@ class TestEndToEndWorkflow:
         )
 
         # Register function
-        logged_model = register_function(
+        logged_model = register_transform(
             func=business_logic,
             name="business.finance.amount_processor",
             description="Process amounts above threshold",
@@ -42,7 +42,9 @@ class TestEndToEndWorkflow:
         assert logged_model.registered_model_version == 1
 
         # Load function
-        loaded_transform = load_function("business.finance.amount_processor", version=1)
+        loaded_transform = load_transform(
+            "business.finance.amount_processor", version=1
+        )
 
         # Test original function (verify it works)
         business_logic(test_data, threshold=100)
@@ -68,7 +70,7 @@ class TestEndToEndWorkflow:
         test_data = spark.createDataFrame([(1, 10), (2, 20), (3, 30)], ["id", "value"])
 
         # Register function from file
-        logged_model = register_function(
+        logged_model = register_transform(
             file_path="tests/fixtures/simple_transform.py",
             function_name="simple_filter",
             name="etl.data.simple_filter",
@@ -81,7 +83,7 @@ class TestEndToEndWorkflow:
         assert logged_model.registered_model_version == 1
 
         # Load function
-        loaded_transform = load_function("etl.data.simple_filter", version=1)
+        loaded_transform = load_transform("etl.data.simple_filter", version=1)
 
         # Test loaded function
         result = loaded_transform(test_data)
@@ -116,7 +118,7 @@ class TestEndToEndWorkflow:
         ]
 
         for func_name, model_name in functions_to_register:
-            register_function(
+            register_transform(
                 file_path="tests/fixtures/complex_transform.py",
                 function_name=func_name,
                 name=model_name,
@@ -124,13 +126,13 @@ class TestEndToEndWorkflow:
             )
 
         # Load and test individual functions
-        data_cleaner = load_function("pipeline.clean.data_cleaner", version=1)
-        feature_engineer = load_function(
+        data_cleaner = load_transform("pipeline.clean.data_cleaner", version=1)
+        feature_engineer = load_transform(
             "pipeline.features.feature_engineer",
             version=1,
         )
-        ml_scorer = load_function("pipeline.ml.ml_scorer", version=1)
-        full_pipeline = load_function("pipeline.complete.full_pipeline", version=1)
+        ml_scorer = load_transform("pipeline.ml.ml_scorer", version=1)
+        full_pipeline = load_transform("pipeline.complete.full_pipeline", version=1)
 
         # Test individual steps
         cleaned = data_cleaner(test_data)
@@ -168,7 +170,7 @@ class TestEndToEndWorkflow:
         ]
 
         for func_name, model_name in functions_to_register:
-            register_function(
+            register_transform(
                 file_path="tests/fixtures/complex_transform.py",
                 function_name=func_name,
                 name=model_name,
@@ -176,13 +178,13 @@ class TestEndToEndWorkflow:
             )
 
         # Load and test individual functions
-        data_cleaner = load_function("pipeline.clean.data_cleaner", version=1)
-        feature_engineer = load_function(
+        data_cleaner = load_transform("pipeline.clean.data_cleaner", version=1)
+        feature_engineer = load_transform(
             "pipeline.features.feature_engineer",
             version=1,
         )
-        ml_scorer = load_function("pipeline.ml.ml_scorer", version=1)
-        full_pipeline = load_function("pipeline.complete.full_pipeline", version=1)
+        ml_scorer = load_transform("pipeline.ml.ml_scorer", version=1)
+        full_pipeline = load_transform("pipeline.complete.full_pipeline", version=1)
 
         # Test individual steps
         cleaned = data_cleaner(test_data)
@@ -217,28 +219,28 @@ class TestEndToEndWorkflow:
         test_data = spark.createDataFrame([(1, "a"), (2, "b")], ["id", "name"])
 
         # Register multiple versions
-        register_function(
+        register_transform(
             func=transform_v1,
             name="test.versioning.transform",
             description="Version 1",
         )
 
-        register_function(
+        register_transform(
             func=transform_v2,
             name="test.versioning.transform",
             description="Version 2",
         )
 
-        register_function(
+        register_transform(
             func=transform_v3,
             name="test.versioning.transform",
             description="Version 3",
         )
 
         # Load different versions
-        transform_v1_specific = load_function("test.versioning.transform", version=1)
-        transform_v2_specific = load_function("test.versioning.transform", version=2)
-        transform_v3_specific = load_function("test.versioning.transform", version=3)
+        transform_v1_specific = load_transform("test.versioning.transform", version=1)
+        transform_v2_specific = load_transform("test.versioning.transform", version=2)
+        transform_v3_specific = load_transform("test.versioning.transform", version=3)
 
         # Test that they work
         result_v1 = transform_v1_specific(test_data)
@@ -259,11 +261,11 @@ class TestEndToEndWorkflow:
 
         # Test loading non-existent function
         with pytest.raises(Exception):  # MLflow will raise an exception
-            load_function("nonexistent.model.name", version=1)
+            load_transform("nonexistent.model.name", version=1)
 
         # Test registering with bad file path
         with pytest.raises(FileNotFoundError):
-            register_function(
+            register_transform(
                 file_path="nonexistent_file.py",
                 function_name="some_function",
                 name="test.bad.file",
@@ -271,7 +273,7 @@ class TestEndToEndWorkflow:
 
         # Test registering with bad function name
         with pytest.raises(AttributeError):
-            register_function(
+            register_transform(
                 file_path="tests/fixtures/simple_transform.py",
                 function_name="nonexistent_function",
                 name="test.bad.function",
@@ -295,7 +297,7 @@ class TestEndToEndWorkflow:
         test_data = spark.createDataFrame([(1, "a")], ["id", "value"])
 
         # Register function
-        register_function(
+        register_transform(
             func=documented_transform,
             name="test.metadata.documented",
             description="Test metadata preservation",
@@ -303,7 +305,7 @@ class TestEndToEndWorkflow:
         )
 
         # Load function
-        loaded_transform = load_function("test.metadata.documented", version=1)
+        loaded_transform = load_transform("test.metadata.documented", version=1)
 
         # Test that it works
         result = loaded_transform(test_data)

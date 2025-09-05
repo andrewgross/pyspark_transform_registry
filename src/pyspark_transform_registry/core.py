@@ -9,7 +9,7 @@ import importlib.util
 import logging
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Optional, Union
 
 import mlflow
 import mlflow.pyfunc
@@ -23,17 +23,17 @@ from .model_wrapper import PySparkTransformModel
 logger = logging.getLogger(__name__)
 
 
-def register_function(
-    func: Callable | None = None,
+def register_transform(
+    func: Optional[Callable] = None,
     *,
     name: str,
-    file_path: str | None = None,
-    function_name: str | None = None,
-    description: str | None = None,
-    tags: dict[str, Any] | None = None,
+    file_path: Optional[str] = None,
+    function_name: Optional[str] = None,
+    description: Optional[str] = None,
+    tags: Optional[dict[str, Any]] = None,
     infer_schema: bool = False,
     infer_requirements: bool = False,
-    extra_pip_requirements: list[str] | None = None,
+    extra_pip_requirements: Optional[list[str]] = None,
 ) -> ModelInfo:
     """
     Register a PySpark transform function in MLflow's model registry.
@@ -63,18 +63,18 @@ def register_function(
         # Direct function registration
         >>> def my_transform(df: DataFrame) -> DataFrame:
         ...     return df.select("*")
-        >>> register_function(my_transform, name="my_catalog.my_schema.my_transform")
+        >>> register_transform(my_transform, name="my_catalog.my_schema.my_transform")
 
         # Multi-parameter function registration
         >>> def filter_transform(df: DataFrame, min_value: int = 0) -> DataFrame:
         ...     return df.filter(df.value >= min_value)
-        >>> register_function(
+        >>> register_transform(
         ...     filter_transform,
         ...     name="my_catalog.my_schema.filter_transform",
         ... )
 
         # File-based registration
-        >>> register_function(
+        >>> register_transform(
         ...     file_path="transforms/my_transform.py",
         ...     function_name="my_transform",
         ...     name="my_catalog.my_schema.my_transform"
@@ -93,7 +93,7 @@ def register_function(
 
     # Load function from file if needed
     if file_path is not None:
-        func = _load_function_from_file(file_path, function_name)
+        func = _load_transform_from_file(file_path, function_name)
 
     # Create model wrapper
     model = PySparkTransformModel(func)
@@ -110,6 +110,8 @@ def register_function(
     # Add description as metadata
     if description:
         log_params["tags"]["description"] = description
+
+    log_params["tags"]["model_type"] = "transform"
 
     # Add function metadata
     _func_name = function_name if function_name else func.__name__
@@ -129,10 +131,10 @@ def register_function(
     return logged_model
 
 
-register_transform = register_function
+register_function = register_transform
 
 
-def load_function_from_uri(
+def load_transform_uri(
     uri: str,
     validate_input: bool = False,
     strict_validation: bool = False,
@@ -149,12 +151,12 @@ def load_function_from_uri(
         Callable: The loaded transform function expecting **kwargs
 
     Example:
-        >>> transform =load_function_from_uri("transforms:/my_catalog.my_schema.my_transform/1")
-        >>> transform =load_function_from_uri("models:/my_catalog.my_schema.my_transform/1")
+        >>> transform =load_transform_uri("transforms:/my_catalog.my_schema.my_transform/1")
+        >>> transform =load_transform_uri("models:/my_catalog.my_schema.my_transform/1")
     """
     parts = uri.split(":/")[-1]
     name, version = parts.split("/")
-    return load_function(
+    return load_transform(
         name,
         version,
         validate_input=validate_input,
@@ -162,12 +164,12 @@ def load_function_from_uri(
     )
 
 
-load_transform_from_uri = load_function_from_uri
+load_function_uri = load_transform_uri
 
 
-def load_function(
+def load_transform(
     name: str,
-    version: int | str,
+    version: Union[int, str],
     validate_input: bool = False,  # noqa - Keep this for backwards compatibility
     strict_validation: bool = False,  # noqa - Keep this for backwards compatibility
 ) -> Callable:
@@ -187,7 +189,7 @@ def load_function(
 
     Examples:
         # Load specific version with validation
-        >>> transform = load_function("my_catalog.my_schema.my_transform", version=1)
+        >>> transform = load_transform("my_catalog.my_schema.my_transform", version=1)
 
         # Use with single parameter
         >>> result = transform(df=df)
@@ -253,10 +255,10 @@ def load_function(
     return transform_wrapper
 
 
-load_transform = load_function
+load_function = load_transform
 
 
-def _load_function_from_file(file_path: str, function_name: str) -> Callable:
+def _load_transform_from_file(file_path: str, function_name: str) -> Callable:
     """
     Load a function from a Python file.
 
@@ -287,15 +289,15 @@ def _load_function_from_file(file_path: str, function_name: str) -> Callable:
     return func
 
 
-def get_latest_function_version(name: str) -> str:
+def get_latest_transform_version(name: str) -> str:
     """
-    Get the latest version of a function in the registry.
+    Get the latest version of a transform in the registry.
 
     Args:
         name: Model name (registered_model_name) in registry
 
     Returns:
-        Latest version of the function
+        Latest version of the transform
     """
     filter_string = f"name = '{name}'"
     model_versions = mlflow.search_model_versions(
@@ -307,9 +309,33 @@ def get_latest_function_version(name: str) -> str:
     return str(latest_version.version)
 
 
+get_latest_function_version = get_latest_transform_version
+
+
+def get_transforms(
+    search_string: Optional[str] = None,
+    tags: str = "tags.model_type = 'transform'",
+) -> list[ModelInfo]:
+    """
+    Get all transforms from the registry.
+
+    Args:
+        search_string: Filter string to search for models
+        tags: Tags to search for models
+
+    Returns:
+        list[ModelInfo]: List of models
+    """
+    if search_string:
+        filter_string = search_string + " and " + tags
+    else:
+        filter_string = tags
+    return mlflow.search_model_versions(filter_string=filter_string)
+
+
 def generate_dummy_signature() -> ModelSignature:
     """
-    Generate a dummy signature for a function.
+    Generate a dummy signature for a transform.
 
     Returns:
         ModelSignature: A dummy signature
