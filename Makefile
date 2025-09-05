@@ -22,6 +22,9 @@ test:
 test-verbose:
 	uv run --dev pytest -v tests/
 
+test-debug:
+	uv run --dev pytest -v tests/ --pdb
+
 # Code quality
 lint:
 	uv run --dev ruff check --fix

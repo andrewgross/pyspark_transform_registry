@@ -49,11 +49,17 @@ class TestEndToEndWorkflow:
 
         # Test loaded function with same data
         loaded_result = loaded_transform(test_data)
-        loaded_count = loaded_result.count()
 
         # Results should be similar (loaded function may have different parameter handling)
-        assert loaded_count > 0
-        assert "processed" in loaded_result.columns
+        assert loaded_result.filter(col("id") == 1).count() == 0
+        assert (
+            loaded_result.filter(col("id") == 2).select("processed").collect()[0][0]
+            == 165
+        )
+        assert (
+            loaded_result.filter(col("id") == 3).select("processed").collect()[0][0]
+            == 275
+        )
 
     def test_file_based_workflow(self, spark, mlflow_tracking):
         """Test complete workflow with file-based registration."""

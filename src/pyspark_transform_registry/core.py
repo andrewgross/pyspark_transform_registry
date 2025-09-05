@@ -30,9 +30,10 @@ def register_function(
     file_path: str | None = None,
     function_name: str | None = None,
     description: str | None = None,
-    extra_pip_requirements: list[str] | None = None,
     tags: dict[str, Any] | None = None,
     infer_schema: bool = False,
+    infer_requirements: bool = False,
+    extra_pip_requirements: list[str] | None = None,
 ) -> ModelInfo:
     """
     Register a PySpark transform function in MLflow's model registry.
@@ -47,13 +48,16 @@ def register_function(
         file_path: Path to Python file containing the function (for file-based registration)
         function_name: Name of function to extract from file (required for file-based)
         description: Model description
-        extra_pip_requirements: Additional pip requirements beyond auto-detected ones
         tags: Tags to attach to the registered model
         infer_schema: Whether to automatically infer schema constraints using static analysis
-        schema_constraint: Pre-computed schema constraint (overrides infer_schema if provided)
+        infer_requirements: Whether to automatically infer pip requirements using static analysis
+        extra_pip_requirements: Additional pip requirements beyond auto-detected ones
 
     Returns:
-        Model URI of the registered model
+        ModelInfo: The logged model with a transform_uri attribute
+
+    Note: The logged model has a transform_uri attribute that can be used to load the function. This exchanges the models:/ prefix for transforms:/ prefix,
+          however both prefixes are supported. The transforms:/ prefix is only used for clarity.
 
     Examples:
         # Direct function registration
@@ -75,6 +79,7 @@ def register_function(
         ...     function_name="my_transform",
         ...     name="my_catalog.my_schema.my_transform"
         ... )
+
     """
     # Validate input arguments
     if func is None and file_path is None:
@@ -117,13 +122,53 @@ def register_function(
     log_params["signature"] = dummy_signature
 
     logged_model = _log_model(name=_func_name, **log_params)
+    version = logged_model.registered_model_version
+    transform_uri = f"transforms:/{name}/{version}"
+    logged_model.transform_uri = transform_uri
+    print(f"Model {_func_name} registered with URI {transform_uri}")
     return logged_model
+
+
+register_transform = register_function
+
+
+def load_function_from_uri(
+    uri: str,
+    validate_input: bool = False,
+    strict_validation: bool = False,
+) -> Callable:
+    """
+    Load a function from a URI.
+
+    Args:
+        uri: URI of the model to load
+        validate_input: Whether to validate input DataFrames against stored schema constraints
+        strict_validation: Whether to use strict validation mode
+
+    Returns:
+        Callable: The loaded transform function expecting **kwargs
+
+    Example:
+        >>> transform =load_function_from_uri("transforms:/my_catalog.my_schema.my_transform/1")
+        >>> transform =load_function_from_uri("models:/my_catalog.my_schema.my_transform/1")
+    """
+    parts = uri.split(":/")[-1]
+    name, version = parts.split("/")
+    return load_function(
+        name,
+        version,
+        validate_input=validate_input,
+        strict_validation=strict_validation,
+    )
+
+
+load_transform_from_uri = load_function_from_uri
 
 
 def load_function(
     name: str,
     version: int | str,
-    validate_input: bool = True,  # noqa - Keep this for backwards compatibility
+    validate_input: bool = False,  # noqa - Keep this for backwards compatibility
     strict_validation: bool = False,  # noqa - Keep this for backwards compatibility
 ) -> Callable:
     """
@@ -208,6 +253,9 @@ def load_function(
     return transform_wrapper
 
 
+load_transform = load_function
+
+
 def _load_function_from_file(file_path: str, function_name: str) -> Callable:
     """
     Load a function from a Python file.
@@ -239,7 +287,7 @@ def _load_function_from_file(file_path: str, function_name: str) -> Callable:
     return func
 
 
-def get_latest_function_version(name: str) -> int:
+def get_latest_function_version(name: str) -> str:
     """
     Get the latest version of a function in the registry.
 
@@ -253,8 +301,10 @@ def get_latest_function_version(name: str) -> int:
     model_versions = mlflow.search_model_versions(
         filter_string=filter_string,
     )
+    if not model_versions:
+        raise ValueError(f"No versions found for model {name}")
     latest_version = max(model_versions, key=lambda x: int(x.version))
-    return latest_version.version
+    return str(latest_version.version)
 
 
 def generate_dummy_signature() -> ModelSignature:
