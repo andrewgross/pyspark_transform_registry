@@ -19,7 +19,9 @@
       "Bash(ls:*)",
       "Bash(python:*)",
       "Bash(find:*)",
-      "Bash(timeout 30s uv run --dev pytest:*)"
+      "Bash(timeout 30s uv run --dev pytest:*)",
+      "Bash(git log:*)",
+      "Bash(git describe:*)"
     ],
     "deny": []
   }

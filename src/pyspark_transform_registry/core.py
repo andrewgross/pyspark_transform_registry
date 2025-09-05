@@ -16,12 +16,8 @@ import mlflow.pyfunc
 from mlflow.models import ModelSignature
 from mlflow.models.model import ModelInfo
 from mlflow.types.schema import ColSpec, Schema
-from pyspark.sql import DataFrame
 
 from .model_wrapper import PySparkTransformModel
-from .runtime_validation import RuntimeValidator
-from .schema_constraints import PartialSchemaConstraint
-from .static_analysis import analyze_function
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -34,10 +30,10 @@ def register_function(
     file_path: str | None = None,
     function_name: str | None = None,
     description: str | None = None,
-    extra_pip_requirements: list[str] | None = None,
     tags: dict[str, Any] | None = None,
-    infer_schema: bool = True,
-    schema_constraint: PartialSchemaConstraint | None = None,
+    infer_schema: bool = False,
+    infer_requirements: bool = False,
+    extra_pip_requirements: list[str] | None = None,
 ) -> ModelInfo:
     """
     Register a PySpark transform function in MLflow's model registry.
@@ -52,13 +48,16 @@ def register_function(
         file_path: Path to Python file containing the function (for file-based registration)
         function_name: Name of function to extract from file (required for file-based)
         description: Model description
-        extra_pip_requirements: Additional pip requirements beyond auto-detected ones
         tags: Tags to attach to the registered model
         infer_schema: Whether to automatically infer schema constraints using static analysis
-        schema_constraint: Pre-computed schema constraint (overrides infer_schema if provided)
+        infer_requirements: Whether to automatically infer pip requirements using static analysis
+        extra_pip_requirements: Additional pip requirements beyond auto-detected ones
 
     Returns:
-        Model URI of the registered model
+        ModelInfo: The logged model with a transform_uri attribute
+
+    Note: The logged model has a transform_uri attribute that can be used to load the function. This exchanges the models:/ prefix for transforms:/ prefix,
+          however both prefixes are supported. The transforms:/ prefix is only used for clarity.
 
     Examples:
         # Direct function registration
@@ -80,6 +79,7 @@ def register_function(
         ...     function_name="my_transform",
         ...     name="my_catalog.my_schema.my_transform"
         ... )
+
     """
     # Validate input arguments
     if func is None and file_path is None:
@@ -95,24 +95,8 @@ def register_function(
     if file_path is not None:
         func = _load_function_from_file(file_path, function_name)
 
-    # Perform schema inference if requested
-    inferred_constraint = None
-    if schema_constraint is not None:
-        # Use provided constraint
-        inferred_constraint = schema_constraint
-    elif infer_schema:
-        # Automatically infer schema constraint using static analysis
-        try:
-            inferred_constraint = analyze_function(func)
-        except Exception as e:
-            logger.warning(
-                "Schema inference failed, proceeding without constraint: %s",
-                e,
-            )
-            inferred_constraint = None
-
     # Create model wrapper
-    model = PySparkTransformModel(func, schema_constraint=inferred_constraint)
+    model = PySparkTransformModel(func)
 
     # Prepare MLflow logging parameters
     log_params = {
@@ -133,51 +117,59 @@ def register_function(
     if func.__doc__:
         log_params["tags"]["docstring"] = func.__doc__
 
-    # Add schema constraint metadata
-    if inferred_constraint is not None:
-        log_params["tags"]["schema_constraint"] = inferred_constraint.to_json()
-        log_params["tags"]["schema_analysis_method"] = (
-            inferred_constraint.analysis_method
-        )
-        log_params["tags"]["schema_required_columns"] = len(
-            inferred_constraint.required_columns,
-        )
-        log_params["tags"]["schema_added_columns"] = len(
-            inferred_constraint.added_columns,
-        )
-        log_params["tags"]["schema_preserves_others"] = str(
-            inferred_constraint.preserves_other_columns,
-        )
-
-        if inferred_constraint.warnings:
-            log_params["tags"]["schema_warnings"] = "; ".join(
-                inferred_constraint.warnings,
-            )
-
     # Generate a dummy signature for MLFlow as our actual signature is not supported by MLFlow
     dummy_signature = generate_dummy_signature()
     log_params["signature"] = dummy_signature
 
-    try:
-        active_run = mlflow.active_run()
-        if active_run is not None:
-            with mlflow.start_run(nested=True):
-                logged_model = _log_model(name=_func_name, **log_params)
-        else:
-            with mlflow.start_run():
-                logged_model = _log_model(name=_func_name, **log_params)
-    except Exception:
-        with mlflow.start_run(nested=True):
-            logged_model = _log_model(name=_func_name, **log_params)
-
+    logged_model = _log_model(name=_func_name, **log_params)
+    version = logged_model.registered_model_version
+    transform_uri = f"transforms:/{name}/{version}"
+    logged_model.transform_uri = transform_uri
+    print(f"Model {_func_name} registered with URI {transform_uri}")
     return logged_model
+
+
+register_transform = register_function
+
+
+def load_function_from_uri(
+    uri: str,
+    validate_input: bool = False,
+    strict_validation: bool = False,
+) -> Callable:
+    """
+    Load a function from a URI.
+
+    Args:
+        uri: URI of the model to load
+        validate_input: Whether to validate input DataFrames against stored schema constraints
+        strict_validation: Whether to use strict validation mode
+
+    Returns:
+        Callable: The loaded transform function expecting **kwargs
+
+    Example:
+        >>> transform =load_function_from_uri("transforms:/my_catalog.my_schema.my_transform/1")
+        >>> transform =load_function_from_uri("models:/my_catalog.my_schema.my_transform/1")
+    """
+    parts = uri.split(":/")[-1]
+    name, version = parts.split("/")
+    return load_function(
+        name,
+        version,
+        validate_input=validate_input,
+        strict_validation=strict_validation,
+    )
+
+
+load_transform_from_uri = load_function_from_uri
 
 
 def load_function(
     name: str,
     version: int | str,
-    validate_input: bool = True,
-    strict_validation: bool = False,
+    validate_input: bool = False,  # noqa - Keep this for backwards compatibility
+    strict_validation: bool = False,  # noqa - Keep this for backwards compatibility
 ) -> Callable:
     """
     Load a previously registered PySpark transform function with optional validation.
@@ -185,30 +177,23 @@ def load_function(
     Args:
         name: Model name in registry (supports 3-part naming: catalog.schema.table)
         version: Model version to load (required)
-        validate_input: Whether to validate input DataFrames against stored schema constraints
-        strict_validation: If True, treat validation warnings as errors
 
     Returns:
-        A callable that supports both single and multi-parameter usage:
-        - Single param: transform(df)
-        - Multi param: transform(df, params={'param1': value1, 'param2': value2})
+        Callable: The loaded transform function expecting **kwargs
 
         The returned function also has additional methods:
         - transform.get_source(): Returns the source code of the original function
         - transform.get_original_function(): Returns the unwrapped original function
 
-        If validation is enabled, input DataFrames will be validated against the
-        stored schema constraints before transformation.
-
     Examples:
         # Load specific version with validation
         >>> transform = load_function("my_catalog.my_schema.my_transform", version=1)
 
-        # Use with single parameter (validates input automatically)
-        >>> result = transform(df)
+        # Use with single parameter
+        >>> result = transform(df=df)
 
-        # Use with multiple parameters (validates input automatically)
-        >>> result = transform(df, params={'min_value': 10, 'threshold': 0.5})
+        # Use with multiple parameters
+        >>> result = transform(df=df, min_value=10, threshold=0.5)
 
         # Inspect the original source code
         >>> print(transform.get_source())
@@ -217,12 +202,6 @@ def load_function(
         >>> original_func = transform.get_original_function()
         >>> import inspect
         >>> print(inspect.signature(original_func))
-
-        # Load specific version without validation
-        >>> transform = load_function("my_catalog.my_schema.my_transform", version=2, validate_input=False)
-
-        # Load with strict validation (warnings become errors)
-        >>> transform = load_function("my_catalog.my_schema.my_transform", version=1, strict_validation=True)
     """
     # Build model URI with explicit version
     model_uri = f"models:/{name}/{version}"
@@ -231,54 +210,21 @@ def load_function(
     loaded_model = mlflow.pyfunc.load_model(model_uri)
 
     # Get the original transform function directly from the model wrapper
-    # This bypasses MLflow's predict() method which doesn't handle params properly
-    # Access the underlying python model via _model_impl.python_model
+    # We are bypassing MLflow's predict() method which won't handle **kwargs properly
     original_func = loaded_model._model_impl.python_model.get_transform_function()
 
-    # Extract schema constraint from model metadata if validation is enabled
-    schema_constraint = None
-    if validate_input:
-        schema_constraint = _load_schema_constraint(name, version)
-
     # Create a wrapper function that handles both single and multi-parameter calls
-    def transform_wrapper(df: DataFrame, params: dict | None = None):
+    def transform_wrapper(*args, **kwargs):
         """
-        Wrapper function that supports both single and multi-parameter usage with optional validation.
+        Wrapper function that supports keyword arguments.
 
         Args:
-            df: Input PySpark DataFrame
-            params: Optional dictionary of additional parameters for multi-input functions
+            **kwargs: Parameters for the original function
 
         Returns:
             Transformed DataFrame
-
-        Raises:
-            ValueError: If input validation fails and strict_validation is True
         """
-        # Perform input validation if enabled and constraint is available
-        if validate_input and schema_constraint is not None:
-            validator = RuntimeValidator(strict_mode=strict_validation)
-            validation_result = validator.validate_dataframe(df, schema_constraint)
-
-            if not validation_result.is_valid:
-                error_messages = validation_result.get_error_messages()
-                raise ValueError(
-                    f"Input validation failed: {'; '.join(error_messages)}",
-                )
-
-            # Log warnings if any (but don't fail the execution)
-            warnings = validation_result.get_warning_messages()
-            if warnings:
-                for warning in warnings:
-                    print(f"Validation warning: {warning}")
-
-        # Execute the transform function
-        if params is None:
-            # Single parameter function call
-            return original_func(df)
-        else:
-            # Multi-parameter function call
-            return original_func(df, **params)
+        return original_func(*args, **kwargs)
 
     # Add methods to access the original function and its source
     def get_source():
@@ -288,9 +234,8 @@ def load_function(
         Returns:
             str: Source code of the original function
         """
-        import inspect
 
-        return inspect.getsource(original_func)
+        return loaded_model._model_impl.python_model.get_function_source()
 
     def get_original_function():
         """
@@ -306,6 +251,9 @@ def load_function(
     transform_wrapper.get_original_function = get_original_function
 
     return transform_wrapper
+
+
+load_transform = load_function
 
 
 def _load_function_from_file(file_path: str, function_name: str) -> Callable:
@@ -339,41 +287,7 @@ def _load_function_from_file(file_path: str, function_name: str) -> Callable:
     return func
 
 
-def _load_schema_constraint(
-    name: str,
-    version: int | str,
-) -> PartialSchemaConstraint | None:
-    """
-    Load schema constraint from MLflow model metadata.
-
-    Args:
-        name: Model name in registry
-        version: Model version
-
-    Returns:
-        PartialSchemaConstraint if found, None otherwise
-    """
-    try:
-        client = mlflow.tracking.MlflowClient()
-        model_version = client.get_model_version(name, str(version))
-        run = client.get_run(model_version.run_id)
-
-        constraint_json = run.data.tags.get("schema_constraint")
-        if constraint_json:
-            return PartialSchemaConstraint.from_json(constraint_json)
-
-    except Exception as e:
-        logger.warning(
-            "Could not load schema constraint for %s v%s, proceeding without validation: %s",
-            name,
-            version,
-            e,
-        )
-
-    return None
-
-
-def get_latest_function_version(name: str) -> int:
+def get_latest_function_version(name: str) -> str:
     """
     Get the latest version of a function in the registry.
 
@@ -387,8 +301,10 @@ def get_latest_function_version(name: str) -> int:
     model_versions = mlflow.search_model_versions(
         filter_string=filter_string,
     )
+    if not model_versions:
+        raise ValueError(f"No versions found for model {name}")
     latest_version = max(model_versions, key=lambda x: int(x.version))
-    return latest_version.version
+    return str(latest_version.version)
 
 
 def generate_dummy_signature() -> ModelSignature:
@@ -404,6 +320,42 @@ def generate_dummy_signature() -> ModelSignature:
 
 
 def _log_model(name: str, **log_params):
+    """
+    Log a model to MLflow.
+
+    Args:
+        name: Model name
+        **log_params: Additional parameters to pass to mlflow.pyfunc.log_model
+
+    Returns:
+        ModelInfo: The logged model
+    """
+    try:
+        active_run = mlflow.active_run()
+        if active_run is not None:
+            with mlflow.start_run(nested=True):
+                logged_model = _log_model_mlflow(name=name, **log_params)
+        else:
+            with mlflow.start_run():
+                logged_model = _log_model_mlflow(name=name, **log_params)
+    except Exception:
+        with mlflow.start_run(nested=True):
+            logged_model = _log_model_mlflow(name=name, **log_params)
+
+    return logged_model
+
+
+def _log_model_mlflow(name: str, **log_params):
+    """
+    Log a model to MLflow.
+
+    Args:
+        name: Model name
+        **log_params: Additional parameters to pass to mlflow.pyfunc.log_model
+
+    Returns:
+        ModelInfo: The logged model
+    """
     for tag_key, tag_value in log_params["tags"].items():
         mlflow.set_tag(tag_key, tag_value)
 

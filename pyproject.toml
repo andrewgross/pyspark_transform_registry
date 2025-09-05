@@ -1,7 +1,7 @@
 [project]
 name = "pyspark-transform-registry"
-version = "0.5.0"
-description = "A PySpark transform registry with MLflow integration. Requires Java 17+ with security manager enabled."
+dynamic = ["version"]
+description = "A PySpark transform registry with MLflow integration."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

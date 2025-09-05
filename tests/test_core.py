@@ -1,7 +1,3 @@
-"""
-Unit tests for the new simplified core module.
-"""
-
 import pytest
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, lit
@@ -9,6 +5,7 @@ from pyspark.sql.functions import col, lit
 from pyspark_transform_registry.core import (
     _load_function_from_file,
     load_function,
+    load_function_from_uri,
     register_function,
 )
 
@@ -31,6 +28,7 @@ class TestDirectRegistration:
         assert logged_model is not None
         assert logged_model.name == "simple_transform"
         assert logged_model.registered_model_version == 1
+        assert logged_model.transform_uri == "transforms:/test.simple.transform/1"
 
     def test_register_function_with_parameters(self, spark, mlflow_tracking):
         """Test registering a function with parameters."""
@@ -156,6 +154,46 @@ class TestFunctionLoading:
         result = loaded_func(test_data)
         assert result.count() == 1
         assert "test_col" in result.columns
+        assert result.select("test_col").collect()[0][0] == "loaded"
+
+    def test_load_function_from_uri(self, spark, mlflow_tracking):
+        """Test loading a specific version of a function."""
+
+        def test_transform_v1(df: DataFrame) -> DataFrame:
+            return df.withColumn("version", lit("v1"))
+
+        def test_transform_v2(df: DataFrame) -> DataFrame:
+            return df.withColumn("version", lit("v2"))
+
+        test_data = spark.createDataFrame([(1, "a")], ["id", "value"])
+
+        # Register v1
+        register_function(
+            func=test_transform_v1,
+            name="test.version.transform",
+        )
+
+        # Register v2
+        register_function(
+            func=test_transform_v2,
+            name="test.version.transform",
+        )
+
+        # Load specific version
+        loaded_func_v1 = load_function_from_uri("transforms:/test.version.transform/1")
+        loaded_func_v2 = load_function_from_uri("models:/test.version.transform/2")
+
+        # Test that different versions work
+        result_v1 = loaded_func_v1(test_data)
+        result_v2 = loaded_func_v2(test_data)
+
+        # Both should work but may have different behavior
+        assert result_v1.count() == 1
+        assert result_v1.select("version").collect()[0][0] == "v1"
+        assert result_v1.columns == ["id", "value", "version"]
+        assert result_v2.count() == 1
+        assert result_v2.select("version").collect()[0][0] == "v2"
+        assert result_v2.columns == ["id", "value", "version"]
 
     def test_load_function_with_version(self, spark, mlflow_tracking):
         """Test loading a specific version of a function."""
@@ -190,7 +228,11 @@ class TestFunctionLoading:
 
         # Both should work but may have different behavior
         assert result_v1.count() == 1
+        assert result_v1.select("version").collect()[0][0] == "v1"
+        assert result_v1.columns == ["id", "value", "version"]
         assert result_v2.count() == 1
+        assert result_v2.select("version").collect()[0][0] == "v2"
+        assert result_v2.columns == ["id", "value", "version"]
 
 
 # Note: TestModelListing class removed - list_registered_functions() functionality eliminated
