@@ -15,6 +15,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.dynamic]
+version = {attr = "pyspark_transform_registry.__version__"}
+
 [dependency-groups]
 dev = [
     "pyspark<4.0",
