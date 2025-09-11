@@ -433,8 +433,7 @@ def install_transform_requirements(
     requirements_path = mlflow.pyfunc.get_model_dependencies(
         f"models:/{name}/{version}"
     )
-    with open(requirements_path) as f:
-        filtered = _filter_requirements(f, exclude_packages)
+    filtered = _filter_requirements(requirements_path, exclude_packages)
 
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_req:
         temp_req.writelines(filtered)
