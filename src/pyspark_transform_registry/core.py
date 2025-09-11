@@ -7,6 +7,10 @@ PySpark transform functions using MLflow's model registry.
 
 import importlib.util
 import logging
+import tempfile
+import subprocess
+import sys
+from pathlib import Path
 import os
 from collections.abc import Callable
 from typing import Any, Optional, Union
@@ -18,6 +22,7 @@ from mlflow.models.model import ModelInfo
 from mlflow.types.schema import ColSpec, Schema
 
 from .model_wrapper import PySparkTransformModel
+from .helpers import _filter_requirements
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -134,6 +139,24 @@ def register_transform(
 register_function = register_transform
 
 
+def _parse_transform_uri(uri: str) -> tuple[str, str]:
+    """
+    Parse a transform URI into a name and version.
+
+    Expects the URI to be in the format of transforms:/name/version or models:/name/version.
+
+    Args:
+        uri: URI of the transform
+
+    Returns:
+        tuple[str, str]: Name and version of the transform
+    """
+    # Remove the transforms:/ or models:/ prefix
+    parts = uri.split(":/")[-1]
+    name, version = parts.split("/")
+    return name, version
+
+
 def load_transform_uri(
     uri: str,
     validate_input: bool = False,
@@ -154,8 +177,7 @@ def load_transform_uri(
         >>> transform =load_transform_uri("transforms:/my_catalog.my_schema.my_transform/1")
         >>> transform =load_transform_uri("models:/my_catalog.my_schema.my_transform/1")
     """
-    parts = uri.split(":/")[-1]
-    name, version = parts.split("/")
+    name, version = _parse_transform_uri(uri)
     return load_transform(
         name,
         version,
@@ -386,3 +408,56 @@ def _log_model_mlflow(name: str, **log_params):
         mlflow.set_tag(tag_key, tag_value)
 
     return mlflow.pyfunc.log_model(name=name, **log_params)
+
+
+def install_transform_requirements(
+    model_uri: str,
+    exclude_packages: list[str] = [
+        "mlflow",
+        "pyspark",
+        "pyspark-transform-registry",
+    ],
+    index_url: Optional[str] = None,
+) -> None:
+    """
+    Installs the requirements for a transform by transform_uri/model_uri, excluding any 'mlflow', 'pyspark', or 'pyspark-transform-registry' dependency.
+
+    If you want to exclude specific packages, you can pass them in the exclude_packages list.
+    Default packages to exclude are mlflow, pyspark, and pyspark-transform-registry.
+
+    Args:
+        transform_uri: The Pyspark Tranform Registry / MLflow model URI containing the model.
+    """
+    name, version = _parse_transform_uri(model_uri)
+    print(f"Installing model requirements for {model_uri}")
+    requirements_path = mlflow.pyfunc.get_model_dependencies(
+        f"models:/{name}/{version}"
+    )
+    with open(requirements_path) as f:
+        filtered = _filter_requirements(f, exclude_packages)
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_req:
+        temp_req.writelines(filtered)
+        temp_req_path = temp_req.name
+    args = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-r",
+        temp_req_path,
+        "--progress-bar",
+        "off",
+    ]
+    if index_url:
+        args.append("--index-url")
+        args.append(index_url)
+    try:
+        subprocess.run(
+            args,
+            check=True,
+        )
+    finally:
+        # We can't use the context manager because we need to delete the file after the
+        # subprocess has finished but need to make sure it is accessible to other processes.
+        Path(temp_req_path).unlink(missing_ok=True)
