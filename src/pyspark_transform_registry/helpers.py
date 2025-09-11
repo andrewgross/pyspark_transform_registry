@@ -40,7 +40,7 @@ def _extract_package_names(requirements_file: str) -> list[str]:
     """
     package_names: list[str] = []
     with open(requirements_file, "r") as f:
-        for line in f:
+        for line in f.readlines():
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
