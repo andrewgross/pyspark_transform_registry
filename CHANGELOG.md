@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2025-09-11
+
+### Features
+- Add `install_transform_requirements()` function for automatic dependency installation from registered transforms
+- Add export of `install_transform_requirements` in public API
+
+### Enhancements
+- Enhanced requirements parsing with improved package name normalization
+- Better underscore/dash handling in package name filtering
+
+## [0.8.0] - 2025-09-11
+
+### Features
+- Add comprehensive test coverage for requirements parsing functions in helpers module
+- Add 18 new tests covering package name normalization, extraction, and filtering
+
+### Bug Fixes
+- Fix bug in `_filter_requirements()` function where exclude package names weren't properly normalized
+- Improve requirements parsing robustness with proper underscore/dash conversion
+
+### Testing
+- Add `TestPackageNameNormalization`, `TestExtractPackageNames`, and `TestFilterRequirements` test classes
+- Comprehensive coverage of edge cases in requirements file parsing
+
 ## [0.7.0] - 2025-09-05
 
 ### Features

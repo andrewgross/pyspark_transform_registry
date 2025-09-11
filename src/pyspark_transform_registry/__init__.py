@@ -6,7 +6,7 @@ using MLflow's model registry. Supports both single-parameter and multi-paramete
 functions with automatic dependency detection and signature inference.
 """
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 from .core import (
     get_latest_function_version,
@@ -17,6 +17,7 @@ from .core import (
     register_transform,
     load_transform_uri,
     load_transform,
+    install_transform_requirements,
 )
 
 
@@ -29,4 +30,5 @@ __all__ = [
     "register_transform",
     "load_transform_uri",
     "load_transform",
+    "install_transform_requirements",
 ]

@@ -91,7 +91,7 @@ import pyspark.sql.functions as F
 
 def feature_engineer(df: DataFrame) -> DataFrame:
     """Create engineered features."""
-    return df.withColumn("feature_1", col("amount") * 2)
+    return df.withColumn("feature_1", F.col("amount") * 2)
 ```
 
 ```python
@@ -118,6 +118,30 @@ print(source_code)  # Shows the original function definition
 original_func = transform.get_original_function()
 print(f"Function name: {original_func.__name__}")
 print(f"Docstring: {original_func.__doc__}")
+```
+
+## Managing Transform Dependencies
+
+Install dependencies for registered transforms automatically:
+
+```python
+from pyspark_transform_registry import install_transform_requirements
+
+# Install all dependencies for a transform
+install_transform_requirements("transforms:/analytics.etl.clean_data/1")
+
+# Then load the transform (dependencies are now available)
+transform = load_transform("analytics.etl.clean_data", version=1)
+```
+
+You can also exclude certain packages (useful when running in environments like Databricks where some packages are pre-installed):
+
+```python
+# Install dependencies but exclude packages already available in the environment
+install_transform_requirements(
+    "transforms:/analytics.etl.clean_data/1",
+    exclude_packages=["pyspark", "mlflow", "pandas"]
+)
 ```
 
 ## Requirements
