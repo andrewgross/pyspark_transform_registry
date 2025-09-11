@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2025-09-11
+
+### Enhancements
+- Improve requirements file parsing robustness by using `readlines()` method for better file handling (b288a41)
+
 ## [0.9.0] - 2025-09-11
 
 ### Features
