@@ -416,6 +416,7 @@ def install_transform_requirements(
         "mlflow",
         "pyspark",
         "pyspark-transform-registry",
+        "cloudpickle",
     ],
     index_url: Optional[str] = None,
 ) -> None:
@@ -423,7 +424,7 @@ def install_transform_requirements(
     Installs the requirements for a transform by transform_uri/model_uri, excluding any 'mlflow', 'pyspark', or 'pyspark-transform-registry' dependency.
 
     If you want to exclude specific packages, you can pass them in the exclude_packages list.
-    Default packages to exclude are mlflow, pyspark, and pyspark-transform-registry.
+    Default packages to exclude are mlflow, pyspark, pyspark-transform-registry, and cloudpickle.
 
     Args:
         transform_uri: The Pyspark Tranform Registry / MLflow model URI containing the model.
@@ -436,7 +437,7 @@ def install_transform_requirements(
     filtered = _filter_requirements(requirements_path, exclude_packages)
 
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_req:
-        temp_req.writelines(filtered)
+        temp_req.writelines("\n".join(filtered))
         temp_req_path = temp_req.name
     args = [
         sys.executable,

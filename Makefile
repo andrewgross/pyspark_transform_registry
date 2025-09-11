@@ -17,20 +17,20 @@ pre-commit:
 	uv run pre-commit run --all-files
 
 test:
-	uv run --dev pytest tests/
+	uv run pytest tests/
 
 test-verbose:
-	uv run --dev pytest -v tests/
+	uv run pytest -v tests/
 
 test-debug:
-	uv run --dev pytest -v tests/ --pdb
+	uv run pytest -v tests/ --pdb
 
 # Code quality
 lint:
-	uv run --dev ruff check --fix
+	uv run ruff check --fix
 
 format:
-	uv run --dev ruff format
+	uv run ruff format
 
 check: lint format test
 	@echo "All checks passed!"
@@ -38,7 +38,7 @@ check: lint format test
 setup: install
 
 install:
-	uv sync --dev
+	uv sync
 	uv run pre-commit install
 
 build: clean

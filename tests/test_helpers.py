@@ -58,7 +58,11 @@ class TestExtractPackageNames:
             f.flush()
 
             packages = _extract_package_names(f.name)
-            assert packages == ["numpy", "pandas", "requests"]
+            assert packages == [
+                ("numpy", "numpy==1.21.0"),
+                ("pandas", "pandas>=1.3.0"),
+                ("requests", "requests~=2.25.0"),
+            ]
 
         Path(f.name).unlink()
 
@@ -71,7 +75,11 @@ class TestExtractPackageNames:
             f.flush()
 
             packages = _extract_package_names(f.name)
-            assert packages == ["requests", "pandas", "sqlalchemy"]
+            assert packages == [
+                ("requests", "requests[security]==2.25.0"),
+                ("pandas", "pandas[all]>=1.3.0"),
+                ("sqlalchemy", "sqlalchemy[postgresql,mysql]"),
+            ]
 
         Path(f.name).unlink()
 
@@ -84,7 +92,11 @@ class TestExtractPackageNames:
             f.flush()
 
             packages = _extract_package_names(f.name)
-            assert packages == ["numpy", "pandas", "requests"]
+            assert packages == [
+                ("numpy", 'numpy==1.21.0; python_version >= "3.7"'),
+                ("pandas", "pandas>=1.3.0; sys_platform == 'win32'"),
+                ("requests", 'requests~=2.25.0; extra == "dev"'),
+            ]
 
         Path(f.name).unlink()
 
@@ -99,7 +111,17 @@ class TestExtractPackageNames:
             f.flush()
 
             packages = _extract_package_names(f.name)
-            assert packages == ["my-package", "other-package", "local-pkg"]
+            assert packages == [
+                (
+                    "my-package",
+                    "-e git+https://github.com/user/repo.git#egg=my_package",
+                ),
+                (
+                    "other-package",
+                    "--editable=git+https://github.com/user/other.git#egg=other-package",
+                ),
+                ("local-pkg", "-e file:///path/to/local#egg=local_pkg"),
+            ]
 
         Path(f.name).unlink()
 
@@ -116,7 +138,7 @@ class TestExtractPackageNames:
             f.flush()
 
             packages = _extract_package_names(f.name)
-            assert packages == ["numpy", "pandas"]
+            assert packages == [("numpy", "numpy==1.21.0"), ("pandas", "pandas>=1.3.0")]
 
         Path(f.name).unlink()
 
@@ -138,12 +160,15 @@ class TestExtractPackageNames:
 
             packages = _extract_package_names(f.name)
             assert packages == [
-                "numpy",
-                "pandas",
-                "requests",
-                "flask",
-                "dev-tool",
-                "pytest",
+                ("numpy", "numpy==1.21.0"),
+                ("pandas", "pandas[all]>=1.3.0"),
+                ("requests", 'requests[security]~=2.25.0; python_version >= "3.7"'),
+                ("flask", "flask==2.0.0"),
+                (
+                    "dev-tool",
+                    "-e git+https://github.com/user/dev-tool.git#egg=dev_tool",
+                ),
+                ("pytest", "pytest>=6.0.0"),
             ]
 
         Path(f.name).unlink()
@@ -157,7 +182,11 @@ class TestExtractPackageNames:
             f.flush()
 
             packages = _extract_package_names(f.name)
-            assert packages == ["my-package", "another-package", "mixed-case-package"]
+            assert packages == [
+                ("my-package", "my_package==1.0.0"),
+                ("another-package", "another-package>=2.0.0"),
+                ("mixed-case-package", "Mixed_Case-Package"),
+            ]
 
         Path(f.name).unlink()
 
@@ -174,7 +203,7 @@ class TestFilterRequirements:
             f.flush()
 
             filtered = _filter_requirements(f.name, ["pandas"])
-            assert filtered == ["numpy", "requests"]
+            assert filtered == ["numpy==1.21.0", "requests~=2.25.0"]
 
         Path(f.name).unlink()
 
@@ -188,11 +217,11 @@ class TestFilterRequirements:
 
             # Test excluding "my-package" should match "my_package" in file due to normalization
             filtered = _filter_requirements(f.name, ["my-package"])
-            assert filtered == ["another-package", "third-pkg"]
+            assert filtered == ["another-package>=2.0.0", "third_pkg"]
 
             # Test excluding "another_package" should match "another-package" in file due to normalization
             filtered = _filter_requirements(f.name, ["another_package"])
-            assert filtered == ["my-package", "third-pkg"]
+            assert filtered == ["my_package==1.0.0", "third_pkg"]
 
         Path(f.name).unlink()
 
@@ -207,7 +236,7 @@ class TestFilterRequirements:
             f.flush()
 
             filtered = _filter_requirements(f.name, ["pandas", "pytest"])
-            assert filtered == ["numpy", "requests", "flask"]
+            assert filtered == ["numpy==1.21.0", "requests~=2.25.0", "flask==2.0.0"]
 
         Path(f.name).unlink()
 
@@ -220,7 +249,7 @@ class TestFilterRequirements:
             f.flush()
 
             filtered = _filter_requirements(f.name, ["nonexistent", "also-missing"])
-            assert filtered == ["numpy", "pandas", "requests"]
+            assert filtered == ["numpy==1.21.0", "pandas>=1.3.0", "requests~=2.25.0"]
 
         Path(f.name).unlink()
 
@@ -248,7 +277,7 @@ class TestFilterRequirements:
 
             filtered = _filter_requirements(f.name, ["dev-tool", "pandas"])
             assert len(filtered) == 2
-            assert "numpy" in filtered
-            assert "requests" in filtered
+            assert "numpy==1.21.0" in filtered
+            assert 'requests[security]~=2.25.0; python_version >= "3.7"' in filtered
 
         Path(f.name).unlink()

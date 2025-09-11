@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2025-09-11
+
+### Enhancements
+- Optimize file handling in `install_transform_requirements()` to avoid opening requirements file twice (79df097)
+- Add `cloudpickle` to default excluded packages in `install_transform_requirements()` function
+- Fix requirements file writing in `install_transform_requirements()` to use proper line joining instead of direct writelines
+
+### Bug Fixes
+- Update helper function tests to match new tuple return format from `_extract_package_names()` function
+- Fix `_extract_package_names()` to return tuples of (normalized_name, original_requirement) for better requirement handling
+- Fix `_filter_requirements()` to properly handle tuple format and preserve original requirement strings
+
+### Development
+- Remove unsupported `--dev` flags from Makefile commands for uv compatibility
+- Improve Makefile commands: `test`, `test-verbose`, `test-debug`, `lint`, `format`, and `install` targets
+- Simplify uv sync command by removing `--dev` flag in install target
+
 ## [0.10.0] - 2025-09-11
 
 ### Enhancements

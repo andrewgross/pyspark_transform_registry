@@ -16,17 +16,16 @@ def _filter_requirements(
     """
     filtered_packages = []
     package_names = _extract_package_names(requirements_path)
-    for line in package_names:
-        normalized_package_name = _normalize_package_name(line)
+    for normalized_package_name, original_requirement in package_names:
         if not any(
             _normalize_package_name(exclude_package) == normalized_package_name
             for exclude_package in exclude_packages
         ):
-            filtered_packages.append(line)
+            filtered_packages.append(original_requirement)
     return filtered_packages
 
 
-def _extract_package_names(requirements_file: str) -> list[str]:
+def _extract_package_names(requirements_file: str) -> list[tuple[str, str]]:
     """
     Extract package names from a requirements file.
 
@@ -42,6 +41,7 @@ def _extract_package_names(requirements_file: str) -> list[str]:
     with open(requirements_file, "r") as f:
         for line in f.readlines():
             line = line.strip()
+            original_requirement = line
             if not line or line.startswith("#"):
                 continue
 
@@ -60,13 +60,17 @@ def _extract_package_names(requirements_file: str) -> list[str]:
                 # Extract package from #egg= fragment
                 match = re.search(r"#egg=([^&\s]+)", url)
                 if match:
-                    package_names.append(_normalize_package_name(match.group(1)))
+                    package_names.append(
+                        (_normalize_package_name(match.group(1)), original_requirement)
+                    )
                 continue
 
             # Extract package name from standard requirement
             match = re.match(r"^([a-zA-Z_][a-zA-Z0-9._-]*)", line)
             if match:
-                package_names.append(_normalize_package_name(match.group(1)))
+                package_names.append(
+                    (_normalize_package_name(match.group(1)), original_requirement)
+                )
 
     return package_names
 
