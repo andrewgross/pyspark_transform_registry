@@ -19,7 +19,7 @@ def _filter_requirements(
     for line in package_names:
         normalized_package_name = _normalize_package_name(line)
         if not any(
-            exclude_package == normalized_package_name
+            _normalize_package_name(exclude_package) == normalized_package_name
             for exclude_package in exclude_packages
         ):
             filtered_packages.append(line)
